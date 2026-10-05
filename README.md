@@ -139,6 +139,30 @@ cd ../frontend && npm install && npm run dev
 > **Bezpieczeństwo:** ewentualne klucze Bybit/brokera wyłącznie z uprawnieniami *read* — system nie
 > handluje, więc nie potrzebuje *trade* ani *withdraw*. W MVP skład portfela jest wpisywany ręcznie.
 
+### Automatyczny deploy (serwer)
+
+Każdy merge do `main` uruchamia workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml),
+który łączy się z serwerem przez SSH i wykonuje [`deploy.sh`](deploy.sh): `git reset` do
+`origin/main`, `docker compose up -d --build --wait` i sprzątanie starych obrazów. Deploy można
+też odpalić ręcznie (Actions → Deploy → Run workflow) albo na serwerze: `./deploy.sh`.
+
+Jednorazowa konfiguracja:
+
+1. Na serwerze repo sklonowane do katalogu docelowego, z uzupełnionymi `.env` i `backend/.env`
+   (przy prywatnym repo serwer potrzebuje deploy key z dostępem do odczytu).
+2. Osobna para kluczy dla GitHub Actions: `ssh-keygen -t ed25519 -f opes_deploy -N ""`,
+   klucz publiczny dopisany do `~/.ssh/authorized_keys` na serwerze.
+3. W GitHub → Settings → Environments utwórz środowisko `production` z sekretami:
+
+| Sekret | Wartość |
+|--------|---------|
+| `SSH_HOST` | adres serwera (np. `srv12.mikr.us`) |
+| `SSH_PORT` | port SSH (na mikr.us niestandardowy, np. `10123`) |
+| `SSH_USER` | użytkownik na serwerze |
+| `SSH_PRIVATE_KEY` | zawartość pliku `opes_deploy` (klucz prywatny) |
+| `SSH_KNOWN_HOSTS` | wynik `ssh-keyscan -p <port> <host>` |
+| `DEPLOY_PATH` | ścieżka do repo na serwerze, np. `/home/user/Praca-Inz` |
+
 ---
 
 ## Testy

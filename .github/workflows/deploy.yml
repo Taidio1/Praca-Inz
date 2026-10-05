@@ -1,0 +1,45 @@
+name: Deploy
+
+# Po każdym merge'u (pushu) do main wdraża aplikację na serwer przez SSH.
+# Można też uruchomić ręcznie z zakładki Actions.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Jeden deploy naraz; nowszy push czeka na zakończenie bieżącego
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    steps:
+      - name: Konfiguracja SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Wdrożenie
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "${SSH_PORT:-22}" \
+            -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 \
+            "$SSH_USER@$SSH_HOST" \
+            "cd '$DEPLOY_PATH' && ./deploy.sh"
+
+      - name: Sprzątanie klucza
+        if: always()
+        run: rm -f ~/.ssh/id_deploy
