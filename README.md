@@ -6,7 +6,7 @@
 > System **informacyjny i diagnostyczny** —
 > **nie rekomenduje transakcji** i nie składa zleceń.
 
-Projekt realizowany jako praca inżynierska. Pełny opis architektury i konwencji: [`CLAUDE.md`](CLAUDE.md).
+Projekt realizowany jako praca inżynierska.
 
 **Teza pracy:** *„Osobisty system do filtrowania i streszczania informacji rynkowej pod skład
 portfela inwestycyjnego, z LLM jako modułem analitycznym."*
