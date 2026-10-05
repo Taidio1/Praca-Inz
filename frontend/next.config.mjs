@@ -10,7 +10,13 @@ const nextConfig = {
   async rewrites() {
     // W dockerze API jest w sieci wewnętrznej; lokalnie (npm run dev) frontend woła je bezpośrednio
     const api = process.env.API_INTERNAL_URL;
-    return api ? [{ source: '/api/:path*', destination: `${api}/api/:path*` }] : [];
+    return api
+      ? [
+          { source: '/api/:path*', destination: `${api}/api/:path*` },
+          // /health jest poza prefiksem /api, a frontend sprawdza nim, czy API żyje
+          { source: '/health', destination: `${api}/health` },
+        ]
+      : [];
   },
 };
 
