@@ -26,3 +26,12 @@ async def test_build_sources_order() -> None:
     async with httpx.AsyncClient() as http:
         names = [s.name for s in build_sources(http, settings)]
     assert names == ["rss", "finnhub", "gdelt"]
+
+
+async def test_build_sources_without_gdelt() -> None:
+    settings = Settings(  # type: ignore[call-arg]
+        supabase_url="http://x", supabase_anon_key="k", gdelt_enabled=False
+    )
+    async with httpx.AsyncClient() as http:
+        names = [s.name for s in build_sources(http, settings)]
+    assert names == ["rss", "finnhub"]

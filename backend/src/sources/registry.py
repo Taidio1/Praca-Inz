@@ -27,7 +27,7 @@ def feeds_from_settings(raw: str) -> dict[Market, tuple[str, ...]]:
 
 def build_sources(http: httpx.AsyncClient, settings: Settings) -> list[NewsSource]:
     lookback = settings.ingest_lookback_hours
-    return [
+    sources: list[NewsSource] = [
         RssSource(http, feeds_from_settings(settings.rss_feeds), lookback_hours=lookback),
         FinnhubNewsSource(
             http,
@@ -35,9 +35,13 @@ def build_sources(http: httpx.AsyncClient, settings: Settings) -> list[NewsSourc
             MinIntervalLimiter(60.0 / settings.finnhub_news_rpm),
             lookback_hours=lookback,
         ),
-        GdeltSource(
-            http,
-            MinIntervalLimiter(settings.gdelt_min_interval_seconds),
-            lookback_hours=lookback,
-        ),
     ]
+    if settings.gdelt_enabled:
+        sources.append(
+            GdeltSource(
+                http,
+                MinIntervalLimiter(settings.gdelt_min_interval_seconds),
+                lookback_hours=lookback,
+            )
+        )
+    return sources

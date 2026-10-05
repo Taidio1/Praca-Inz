@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     ingest_lookback_hours: int = 72
     # JSON {"crypto": [url, ...], "gpw": [...], ...} per rynek; pusty => domyślne feedy
     rss_feeds: str = ""
+    # GDELT liczy limit per IP; na hostingu ze wspólnym IPv4 (mikr.us) stale zwraca 429
+    gdelt_enabled: bool = True
     # GDELT DOC API odrzuca częstsze zapytania niż 1/5 s
     gdelt_min_interval_seconds: float = 6.0
     # Finnhub free: 60 req/min łącznie z workerem notowań
