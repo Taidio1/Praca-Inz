@@ -1,0 +1,62 @@
+[project]
+name = "opes-backend"
+version = "0.1.0"
+description = "Opes — backend API (FastAPI + Supabase)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "supabase>=2.15",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "structlog>=24.1",
+    "PyJWT[crypto]>=2.8",
+    "httpx>=0.27",
+    "tenacity>=8.2",
+    "feedparser>=6.0",
+    "anthropic>=1.0",
+    "sentence-transformers>=3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "mypy>=1.10",
+    "ruff>=0.4",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
+testpaths = ["tests"]
+markers = [
+    "model: wymaga pobranego modelu embeddingów (wolne)",
+    "live: woła prawdziwe zewnętrzne API (koszt)",
+]
+addopts = "-m 'not model and not live'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+packages = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["supabase.*", "postgrest.*", "gotrue.*", "realtime.*", "storage3.*", "supafunc.*"]
+ignore_missing_imports = true
+follow_imports = "skip"

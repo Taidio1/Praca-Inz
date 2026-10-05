@@ -1,0 +1,80 @@
+# Opes na serwerze mikr.us, obok innych aplikacji (np. jestemkapi-app na porcie 3000).
+#   - własna nazwa projektu i sieć: nic nie miesza się z innymi kontenerami
+#   - na zewnątrz wystawiony jest tylko frontend (OPES_PORT, domyślnie 3001)
+#   - API nie ma portu na hoście: frontend przekierowuje /api/* do kontenera api
+#   - limity pamięci i rotacja logów, bo serwer ma ~2.3 GB RAM i 30 GB dysku
+#
+# Uruchomienie: cp .env.example .env (uzupełnij), backend/.env z kluczami, potem
+#   docker compose up -d --build
+name: opes
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-backend: &backend
+  build: ./backend
+  image: opes-backend:latest
+  env_file: ./backend/.env
+  restart: unless-stopped
+  logging: *logging
+
+services:
+  api:
+    <<: *backend
+    environment:
+      API_CORS_ORIGINS: ${PUBLIC_URL:-https://opes.tojest.dev}
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  engine:
+    <<: *backend
+    command: ["python", "-m", "src.engine.runner"]
+    environment:
+      # Model e5-small na CPU: jeden wątek wystarczy przy małym obciążeniu i nie dusi reszty serwera
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+    volumes:
+      - hf-cache:/home/opes/.cache/huggingface
+    # Zmierzone: ~800 MB po załadowaniu modelu, ~920 MB przy paczce 500 tekstów
+    mem_limit: 1200m
+
+  marketdata:
+    <<: *backend
+    command: ["python", "-m", "src.marketdata.runner"]
+    mem_limit: 256m
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?uzupełnij .env}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?uzupełnij .env}
+        NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-https://opes.tojest.dev}
+        API_INTERNAL_URL: http://api:8000
+    image: opes-web:latest
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${OPES_PORT:-3001}:3000"
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  hf-cache:

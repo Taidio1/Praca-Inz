@@ -1,0 +1,96 @@
+# ============================================================
+# Pliki wygenerowane przez AI i narzędzia asystentów (nie trafiają do repo)
+# ============================================================
+CLAUDE.md
+**/CLAUDE.md
+AGENTS.md
+**/AGENTS.md
+GEMINI.md
+.claude/
+.superpowers/
+.cursor/
+.cursorrules
+.windsurfrules
+.aider*
+.github/copilot-instructions.md
+MOCKUP_CLEANUP_REPORT.md
+
+# Eksport projektu z Claude Design (prototypy HTML + instrukcja dla agenta)
+frontend/project/
+frontend/README.md
+
+# Dokumentacja pracy, plany, specyfikacje i makiety (wszystko w docs/)
+# Wyjątek: zrzut ekranu używany w README.md
+docs/*
+!docs/assets/
+docs/assets/*
+!docs/assets/screenshots/
+docs/assets/screenshots/*
+!docs/assets/screenshots/portfolio_dashboard.png
+
+# Odłożone stare komponenty i wzór dokumentacji
+_attic/
+wzor_dokumentacji_projektowej*.docx
+
+# ============================================================
+# Sekrety i zmienne środowiskowe (wzorce *.example zostają)
+# ============================================================
+.env
+.env.*
+!.env.example
+!.env.*.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+build/
+dist/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+
+# ============================================================
+# Node / Next.js
+# ============================================================
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vercel/
+
+# ============================================================
+# Supabase (lokalny stan CLI)
+# ============================================================
+supabase/.branches/
+supabase/.temp/
+
+# ============================================================
+# Narzędzia, edytory, system
+# ============================================================
+.fallow/
+.vscode/
+.idea/
+*.swp
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+~$*
