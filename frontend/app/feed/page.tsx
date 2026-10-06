@@ -16,9 +16,9 @@ const TRIGGER_LABEL: Record<string, string> = {
   daily: 'podsumowanie dnia',
 };
 
+/* key_items to cytowane źródła (1-5), nie wielkość paczki: bez liczby, żeby nie wprowadzać w błąd */
 function triggerText(card: Insight): string | null {
   if (!card.trigger) return null;
-  if (card.trigger === 'batch') return `paczka ${card.key_items.length} newsów`;
   return TRIGGER_LABEL[card.trigger] ?? card.trigger;
 }
 

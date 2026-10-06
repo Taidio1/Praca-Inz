@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 Trigger = Literal["important", "batch", "daily"]
+_MAX_BACKOFF = 6 * 60  # minuty
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,9 @@ class Candidate:
 class AssetActivity:
     last_insight_at: datetime | None
     insights_today: int
+    # Nieudane syntezy (invalid/error) też kosztują: wycofanie wykładnicze od ostatniej
+    last_failure_at: datetime | None = None
+    failures_today: int = 0
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,14 @@ def decide(
     last = activity.last_insight_at
     if last is not None and now - last < timedelta(minutes=rules.min_gap_minutes):
         return Decision(None, f"odstęp krótszy niż {rules.min_gap_minutes} min")
+    failed = activity.last_failure_at
+    if failed is not None and activity.failures_today > 0:
+        backoff = timedelta(
+            minutes=min(rules.min_gap_minutes * 2 ** (activity.failures_today - 1), _MAX_BACKOFF)
+        )
+        if now - failed < backoff:
+            minutes = int(backoff.total_seconds() // 60)
+            return Decision(None, f"błąd ostatniej syntezy, ponowienie po {minutes} min")
     top = max(c.score for c in candidates)
     if top >= rules.important_score:
         return Decision("important", f"news o trafności {top:.2f}")

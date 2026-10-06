@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
+from uuid import uuid4
 
 import structlog
 
@@ -31,11 +32,19 @@ from src.synthesis.validator import SYNTHESIS_SCHEMA, DraftInvalid, SynthesisDra
 log = structlog.get_logger(__name__)
 Row = dict[str, Any]
 _MAX_TOKENS = 1024
+# Dzierżawa blokady: wygasa sama, gdyby proces padł w trakcie syntezy
+LOCK_TTL = timedelta(minutes=10)
 
 
 class SynthesisRepo(Protocol):
     async def candidates(
-        self, asset_id: str, *, threshold: float, since: datetime, limit: int
+        self,
+        asset_id: str,
+        *,
+        threshold: float,
+        since: datetime,
+        fetched_after: datetime,
+        limit: int,
     ) -> list[Row]: ...
     async def activity(self, asset_ids: list[str], day_start: datetime) -> dict[str, Row]: ...
     async def cost_since(self, since: datetime) -> float: ...
@@ -44,6 +53,9 @@ class SynthesisRepo(Protocol):
     async def insert_run(self, row: Row) -> str: ...
     async def insert_insight(self, row: Row) -> str: ...
     async def insert_insight_items(self, rows: list[Row]) -> None: ...
+    async def delete_insight(self, insight_id: str) -> None: ...
+    async def acquire_lock(self, owner: str, ttl: timedelta) -> bool: ...
+    async def release_lock(self, owner: str) -> None: ...
 
 
 @dataclass
@@ -107,6 +119,17 @@ class SynthesisService:
         if self._provider is None:
             stats.errors["llm"] = "brak ANTHROPIC_API_KEY"
             return stats
+        # Jeden syntetyzujący proces na bazę (serwer + lokalny worker = podwójne insighty)
+        owner = str(uuid4())
+        if not await self._repo.acquire_lock(owner, LOCK_TTL):
+            stats.errors["lock"] = "synteza wykonywana przez inny proces, pomijam w tym cyklu"
+            return stats
+        try:
+            return await self._run_locked(stats)
+        finally:
+            await self._repo.release_lock(owner)
+
+    async def _run_locked(self, stats: SynthesisStats) -> SynthesisStats:
         now = self._clock()
         assets = await self._assets.tracked_assets()
         if not assets:
@@ -122,12 +145,20 @@ class SynthesisService:
             act = activity.get(asset.id, {})
             last = _ts(act.get("last_insight_at"))
             since = last or now - self._lookback
+            # since: czas OCENY po ostatnim insighcie (news oceniony później nie przepada);
+            # fetched_after: zaległość ograniczona oknem wstecz
             rows = await self._repo.candidates(asset.id, threshold=self._threshold,
-                                               since=since, limit=50)
+                                               since=since, fetched_after=now - self._lookback,
+                                               limit=50)
             cands = [Candidate(str(r["item_id"]), float(r["score"]), _ts(r["fetched_at"]) or now)
                      for r in rows]
-            decision = decide(cands, AssetActivity(last, int(act.get("insights_today", 0))),
-                              self._rules, now)
+            activity_now = AssetActivity(
+                last,
+                int(act.get("insights_today", 0)),
+                last_failure_at=_ts(act.get("last_failure_at")),
+                failures_today=int(act.get("failures_today", 0)),
+            )
+            decision = decide(cands, activity_now, self._rules, now)
             if decision.trigger is None:
                 stats.waiting[asset.ticker] = decision.reason
                 continue
@@ -147,9 +178,14 @@ class SynthesisService:
                 stats.skipped_budget += 1
                 stats.waiting[asset.ticker] = "limit dzienny budżetu"
                 continue
-            await self._synthesize(asset, decision, rows, activity.get(asset.id, {}),
-                                   profiles.get(asset.id), snapshots.get(asset.id), budget,
-                                   stats, now)
+            try:
+                await self._synthesize(asset, decision, rows, activity.get(asset.id, {}),
+                                       profiles.get(asset.id), snapshots.get(asset.id), budget,
+                                       stats, now)
+            except Exception as exc:  # noqa: BLE001 (błąd jednego aktywa nie zatrzymuje etapu)
+                log.exception("synthesis_asset_failed", asset=asset.ticker)
+                stats.failed += 1
+                stats.errors[f"synthesis:{asset.ticker}"] = f"{type(exc).__name__}: {exc}"
         stats.budget_exhausted = budget.exhausted
         log.info("synthesis_done", **{k: v for k, v in stats.as_json().items() if k != "waiting"})
         return stats
@@ -237,9 +273,14 @@ class SynthesisService:
             "trigger": decision.trigger,
         })
         by_short = {i.short_id: i for i in items}
-        await self._repo.insert_insight_items([
-            {"insight_id": insight_id, "item_id": by_short[s].item_id,
-             "relevance": by_short[s].score}
-            for s in draft.key_item_ids
-        ])
+        try:
+            await self._repo.insert_insight_items([
+                {"insight_id": insight_id, "item_id": by_short[s].item_id,
+                 "relevance": by_short[s].score}
+                for s in draft.key_item_ids
+            ])
+        except Exception:
+            # Bez transakcji: kompensacja, żeby w strumieniu nie został insight bez źródeł
+            await self._repo.delete_insight(insight_id)
+            raise
         stats.created += 1

@@ -8,12 +8,19 @@ from pydantic import BaseModel, Field, ValidationError
 Label = Literal["positive", "neutral", "negative"]
 _POS, _NEG = 0.2, -0.2  # zgodnie z filtrem sentymentu InsightsRepository
 
-# Zakaz sformułowań doradczych; relacjonowanie newsów (cel cenowy analityków) jest dozwolone.
+# Zakaz sformułowań doradczych skierowanych do czytelnika. Relacjonowanie newsów jest dozwolone:
+# cel cenowy analityków, zlecenia stop-loss przy likwidacjach, cytowane porzekadła.
 _TRANSACTION = re.compile(
-    r"\bkupuj\b|\bsprzedaj\b|\btrzymaj\b|\bsprzedawaj\w*"
-    r"|\bwarto (kupić|sprzedać|kupować|sprzedawać|trzymać)|\bpolecamy\b"
-    r"|\bwe recommend|\byou should (buy|sell|hold)|\bstop[- ]?loss|\btake[- ]?profit"
-    r"|\b(buy|sell|hold) signal",
+    r"\b(kupuj|kupcie|sprzedaj|sprzedajcie|sprzedawaj|trzymaj|trzymajcie)\w* "
+    r"(te |tę |swoje |swoją )?"
+    r"(akcj|pozycj|spółk|walor|udział|token|bitcoin|btc|eth|kryptowalut|etf)"
+    r"|\bwarto (kupić|sprzedać|kupować|sprzedawać|trzymać)"
+    r"|\b(zalecamy|rekomendujemy|polecamy|radzimy)\b"
+    r"|\bnależy (kupić|sprzedać|kupować|sprzedawać)"
+    r"|\b(dobry|świetny|idealny) moment na (zakup|sprzedaż|kupno)"
+    r"|\bokazja do (zakupu|kupna)"
+    r"|\bwe recommend|\byou should (buy|sell|hold)"
+    r"|\b(ustaw|ustawić|ustawcie|set)\w* (zlecenie |a )?(stop[- ]?loss|take[- ]?profit)",
     re.IGNORECASE,
 )
 

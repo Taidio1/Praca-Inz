@@ -47,3 +47,21 @@ def test_priority_orders_important_first_then_volume() -> None:
     small = (Decision("batch", ""), [cand(0.6, i) for i in range(3)])
     ranked = sorted([small, big, imp], key=lambda x: priority(*x), reverse=True)
     assert ranked == [imp, big, small]
+
+
+def test_recent_failure_blocks_like_min_gap() -> None:
+    # Nieudana synteza (invalid/error) jest płatna: bez wycofania aktywo drenuje budżet co cykl
+    act = AssetActivity(last_insight_at=None, insights_today=0,
+                        last_failure_at=NOW - timedelta(minutes=10), failures_today=1)
+    d = decide([cand(0.95)], act, RULES, NOW)
+    assert d.trigger is None and "błąd" in d.reason
+
+
+def test_backoff_grows_with_failures() -> None:
+    # 3 porażki dziś: odstęp 30 min * 2^(3-1) = 2 h
+    act = AssetActivity(last_insight_at=None, insights_today=0,
+                        last_failure_at=NOW - timedelta(minutes=90), failures_today=3)
+    assert decide([cand(0.95)], act, RULES, NOW).trigger is None
+    later = AssetActivity(last_insight_at=None, insights_today=0,
+                          last_failure_at=NOW - timedelta(minutes=125), failures_today=3)
+    assert decide([cand(0.95)], later, RULES, NOW).trigger == "important"

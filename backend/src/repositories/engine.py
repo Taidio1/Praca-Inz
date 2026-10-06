@@ -3,6 +3,8 @@ from typing import Any
 
 from supabase import AsyncClient
 
+from src.repositories.llm_costs import llm_cost_since
+
 Row = dict[str, Any]
 
 
@@ -49,11 +51,4 @@ class EngineRepository:
         return list(res.data)
 
     async def cost_since(self, since: datetime) -> float:
-        res = await (
-            self._client.table("llm_runs")
-            .select("cost_usd")
-            .gte("created_at", since.isoformat())
-            .limit(10000)
-            .execute()
-        )
-        return sum(float(r["cost_usd"] or 0) for r in res.data)
+        return await llm_cost_since(self._client, since)

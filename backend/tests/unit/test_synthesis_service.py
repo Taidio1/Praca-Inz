@@ -57,8 +57,9 @@ class FakeRepo:
         self.since: dict[str, datetime] = {}
 
     async def candidates(self, asset_id: str, *, threshold: float, since: datetime,
-                         limit: int) -> list[dict[str, Any]]:
+                         fetched_after: datetime, limit: int) -> list[dict[str, Any]]:
         self.since[asset_id] = since
+        self.fetched_after = fetched_after
         return [r for r in self.cands.get(asset_id, []) if r["fetched_at"] > since]
 
     async def activity(self, asset_ids: list[str],
@@ -84,6 +85,16 @@ class FakeRepo:
 
     async def insert_insight_items(self, rows: list[dict[str, Any]]) -> None:
         self.links.extend(rows)
+
+    async def delete_insight(self, insight_id: str) -> None:
+        self.insights = [i for n, i in enumerate(self.insights, 1) if f"ins-{n}" != insight_id]
+
+    async def acquire_lock(self, owner: str, ttl: timedelta) -> bool:
+        self.lock_events = [*getattr(self, "lock_events", []), ("acquire", owner)]
+        return not getattr(self, "locked_elsewhere", False)
+
+    async def release_lock(self, owner: str) -> None:
+        self.lock_events = [*getattr(self, "lock_events", []), ("release", owner)]
 
 
 class FakeAssets:
@@ -144,7 +155,7 @@ async def test_repair_once_then_success() -> None:
 
 async def test_invalid_twice_logs_invalid_and_no_insight() -> None:
     repo = FakeRepo({"a-nvda": [row(1, 0.9)]})
-    bad = answer(["n1"], summary="Analitycy radzą: kupuj przed wynikami kwartalnymi.")
+    bad = answer(["n1"], summary="Zalecamy zakup akcji przed wynikami kwartalnymi.")
     stats = await svc(repo, [NVDA], FakeProvider([bad, bad])).run()
     assert stats.invalid == 1 and repo.insights == []
     assert [r["status"] for r in repo.runs] == ["invalid", "invalid"]
@@ -190,3 +201,66 @@ async def test_max_per_cycle_cap() -> None:
     # oba "important"; BTC ma więcej kandydatów, więc wyższy priorytet
     stats = await svc(repo, [NVDA, BTC], FakeProvider([answer(["n1"])]), max_per_cycle=1).run()
     assert stats.created == 1 and repo.insights[0]["asset_id"] == "a-btc"  # wyższy priorytet
+
+
+async def test_failed_asset_backs_off_without_paid_call() -> None:
+    act = {"a-nvda": {"last_insight_at": None, "last_summary": None, "insights_today": 0,
+                      "last_failure_at": NOW - timedelta(minutes=5), "failures_today": 1}}
+    repo = FakeRepo({"a-nvda": [row(1, 0.95)]}, act)
+    prov = FakeProvider([])
+    stats = await svc(repo, [NVDA], prov).run()
+    assert prov.users == [] and stats.created == 0
+    assert "błąd ostatniej syntezy" in stats.waiting["NVDA"]
+
+
+async def test_second_worker_skips_synthesis_when_locked() -> None:
+    # Serwer i lokalny worker na tej samej bazie: tylko jeden syntetyzuje naraz
+    repo = FakeRepo({"a-nvda": [row(1, 0.95)]})
+    repo.locked_elsewhere = True
+    prov = FakeProvider([])
+    stats = await svc(repo, [NVDA], prov).run()
+    assert prov.users == [] and stats.created == 0
+    assert "inny proces" in stats.errors["lock"]
+
+
+async def test_lock_released_after_run() -> None:
+    repo = FakeRepo({"a-nvda": [row(1, 0.95)]})
+    await svc(repo, [NVDA], FakeProvider([answer(["n1"])])).run()
+    assert [e[0] for e in repo.lock_events] == ["acquire", "release"]
+
+
+async def test_scored_since_last_insight_with_bounded_backlog() -> None:
+    # Znacznik "zużycia" to czas oceny (relevance), a okno pobrania ogranicza zaległość do 72 h
+    act = {"a-nvda": {"last_insight_at": NOW - timedelta(hours=2), "last_summary": "x",
+                      "insights_today": 1}}
+    repo = FakeRepo({"a-nvda": []}, act)
+    await svc(repo, [NVDA], FakeProvider([])).run()
+    assert repo.since["a-nvda"] == NOW - timedelta(hours=2)
+    assert repo.fetched_after == NOW - timedelta(hours=72)
+
+
+async def test_storage_error_on_one_asset_does_not_stop_others() -> None:
+    class FlakyInsights(FakeRepo):
+        async def insert_insight(self, r: dict[str, Any]) -> str:
+            if r["asset_id"] == "a-nvda":
+                raise ConnectionError("supabase chwilowo niedostępny")
+            return await super().insert_insight(r)
+
+    repo = FlakyInsights({"a-nvda": [row(1, 0.9)], "a-btc": [row(5, 0.95)]})
+    prov = FakeProvider([answer(["n1"]), answer(["n1"])])
+    stats = await svc(repo, [NVDA, BTC], prov).run()
+    assert stats.created == 1 and repo.insights[0]["asset_id"] == "a-btc"
+    assert "supabase" in stats.errors["synthesis:NVDA"]
+    assert [e[0] for e in repo.lock_events] == ["acquire", "release"]
+
+
+async def test_failed_citation_write_removes_orphan_insight() -> None:
+    # Insight bez cytowań nie może zostać w strumieniu (zapis nie jest transakcyjny)
+    class FlakyLinks(FakeRepo):
+        async def insert_insight_items(self, rows: list[dict[str, Any]]) -> None:
+            raise ConnectionError("zerwane połączenie")
+
+    repo = FlakyLinks({"a-nvda": [row(1, 0.95)]})
+    stats = await svc(repo, [NVDA], FakeProvider([answer(["n1"])])).run()
+    assert repo.insights == [] and stats.created == 0
+    assert "zerwane" in stats.errors["synthesis:NVDA"]

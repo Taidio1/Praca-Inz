@@ -80,3 +80,26 @@ def test_real_model_response_validates() -> None:
     data = json.loads(FIX.read_text(encoding="utf-8"))
     draft = validate_draft(data["response"], set(data["allowed_ids"]))
     assert draft.key_item_ids and set(draft.key_item_ids) <= set(data["allowed_ids"])
+
+
+@pytest.mark.parametrize("text", [
+    "Fala likwidacji uruchomiła zlecenia stop-loss na BTC.",
+    "Inwestorzy realizowali zyski (take profit) po rajdzie.",
+    "Według analityków JPMorgan to hold signal dla sektora.",
+    "Stare porzekadło mówi: kupuj plotki, sprzedawaj fakty.",
+])
+def test_reporting_market_mechanics_allowed(text: str) -> None:
+    # Relacjonowanie zdarzeń rynkowych nie jest doradztwem (fałszywe odrzucenia = płatne naprawy)
+    validate_draft(dump(summary=f"Podsumowanie newsów. {text}"), IDS)
+
+
+@pytest.mark.parametrize("text", [
+    "Zalecamy zakup akcji przed wynikami.",
+    "Rekomendujemy akumulację pozycji.",
+    "To dobry moment na zakup.",
+    "Należy kupić akcje teraz.",
+    "Ustaw stop-loss poniżej wsparcia.",
+])
+def test_advisory_phrases_rejected(text: str) -> None:
+    with pytest.raises(DraftInvalid, match="rekomendac"):
+        validate_draft(dump(summary=f"Podsumowanie newsów. {text}"), IDS)
