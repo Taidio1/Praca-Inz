@@ -4,7 +4,9 @@ from supabase import AsyncClient
 
 Row = dict[str, Any]
 
-_TX_FIELDS = "id, quantity, price, currency, fx_rate, fx_rate_date, purchased_at, created_at"
+_TX_FIELDS = (
+    "id, quantity, price, currency, fx_rate, fx_rate_date, physical_form, purchased_at, created_at"
+)
 
 
 class PortfolioRepository:
@@ -77,6 +79,7 @@ class PortfolioRepository:
         currency: str,
         fx_rate: float,
         fx_rate_date: str,
+        physical_form: str | None = None,
     ) -> Row:
         res = await (
             self._client.table("portfolio_transactions")
@@ -90,6 +93,7 @@ class PortfolioRepository:
                     "currency": currency,
                     "fx_rate": fx_rate,
                     "fx_rate_date": fx_rate_date,
+                    "physical_form": physical_form,
                 }
             )
             .execute()

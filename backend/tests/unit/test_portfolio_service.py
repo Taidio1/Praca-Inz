@@ -14,6 +14,13 @@ ASSET_BTC = {
     "asset_type": "crypto",
     "currency": "USD",
 }
+ASSET_XAU = {
+    "id": "aaaaaaaa-0000-0000-0000-000000000005",
+    "ticker": "XAU",
+    "name": "Złoto (fizyczne)",
+    "asset_type": "commodity",
+    "currency": "USD",
+}
 USER_ID = "11111111-1111-1111-1111-111111111111"
 
 
@@ -97,8 +104,10 @@ class FakePortfolioRepo:
         currency: str,
         fx_rate: float,
         fx_rate_date: str,
+        physical_form: str | None = None,
     ) -> dict:  # type: ignore[type-arg]
         row = {
+            "physical_form": physical_form,
             "currency": currency,
             "fx_rate": fx_rate,
             "fx_rate_date": fx_rate_date,
@@ -216,7 +225,7 @@ def make_service(
 ) -> tuple[PortfolioService, FakePortfolioRepo]:
     repo = portfolio or FakePortfolioRepo()
     svc = PortfolioService(
-        assets=FakeAssetsRepo([ASSET_BTC]),
+        assets=FakeAssetsRepo([ASSET_BTC, ASSET_XAU]),
         assets_writer=FakeAssetsWriter(),
         asset_search=FakeAssetSearch(),
         portfolio=repo,
@@ -365,6 +374,31 @@ async def test_first_purchase_creates_position_and_transaction() -> None:
     assert len(repo.transactions) == 1
     assert repo.transactions[0]["position_id"] == repo.positions[0]["id"]
     assert repo.transactions[0]["purchased_at"]  # data ISO przekazana do repo
+
+
+async def test_physical_metal_purchase_stores_form() -> None:
+    svc, repo = make_service()
+    out = await svc.add_position(
+        USER_ID,
+        PositionCreate(
+            ticker="xau", asset_type="commodity", quantity=1.0, price=2400.0,
+            physical_form="coin",
+        ),
+    )
+    assert out.asset.asset_type == "commodity"
+    assert repo.transactions[0]["physical_form"] == "coin"
+    txs = await svc.list_transactions(repo.positions[0]["id"])
+    assert txs[0].physical_form == "coin"
+
+
+async def test_physical_form_rejected_for_non_metal() -> None:
+    svc, repo = make_service()
+    with pytest.raises(ValidationError):
+        await svc.add_position(
+            USER_ID,
+            PositionCreate(ticker="btc", asset_type="crypto", quantity=1.0, physical_form="bar"),
+        )
+    assert repo.transactions == []
 
 
 async def test_list_transactions_returns_rows() -> None:

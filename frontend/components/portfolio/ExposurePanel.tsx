@@ -13,6 +13,7 @@ const TYPE_COLORS: Record<AssetType, string> = {
   crypto: 'var(--cat1)',
   stock: 'var(--cat3)',
   etf: 'var(--cat4)',
+  commodity: 'var(--cat5)',
 };
 
 export default function ExposurePanel({ priced }: { priced: PositionMetrics[] }) {

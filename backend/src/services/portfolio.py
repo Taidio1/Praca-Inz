@@ -7,6 +7,7 @@ import structlog
 
 from src.core.errors import NotFoundError, ValidationError
 from src.marketdata.fx import FxRate, FxRateError
+from src.marketdata.metals import metal
 from src.marketdata.providers import QuoteError
 from src.marketdata.symbol_search import SymbolMatch
 from src.schemas.assets import AssetType
@@ -72,6 +73,7 @@ class PortfolioRepo(Protocol):
         self, position_id: str, user_id: str, quantity: float,
         price: float | None, purchased_at: str,
         currency: str, fx_rate: float, fx_rate_date: str,
+        physical_form: str | None = None,
     ) -> Row: ...
     async def list_transactions(self, position_id: str) -> list[Row]: ...
     async def get_transaction(self, position_id: str, tx_id: str) -> Row | None: ...
@@ -90,6 +92,13 @@ class SnapshotsRepo(Protocol):
 
 class LatestInsightsRepo(Protocol):
     async def latest_per_asset(self, asset_ids: list[str]) -> dict[str, Row]: ...
+
+
+def _aliases(match: SymbolMatch) -> list[str]:
+    found = metal(match.ticker) if match.asset_type == "commodity" else None
+    if found is not None:
+        return list(found.aliases)
+    return [match.name.lower(), match.ticker.lower()]
 
 
 async def base_currency_of(settings: SettingsRepo) -> str:
@@ -145,6 +154,8 @@ class PortfolioService:
     async def add_position(
         self, user_id: str, payload: PositionCreate
     ) -> PortfolioPositionOut:
+        if payload.physical_form is not None and payload.asset_type != "commodity":
+            raise ValidationError("Forma fizyczna dotyczy tylko metali szlachetnych")
         asset = await self._assets.find_by_ticker(payload.ticker, payload.asset_type)
         if asset is None:
             match = await self._asset_search.lookup(payload.ticker, payload.asset_type)
@@ -162,7 +173,7 @@ class PortfolioService:
                 ticker=match.ticker,
                 name=match.name,
                 asset_type=match.asset_type,
-                aliases=[match.name.lower(), match.ticker.lower()],
+                aliases=_aliases(match),
                 currency=quote_currency,
             )
         tx_currency = payload.currency or asset["currency"]
@@ -177,6 +188,7 @@ class PortfolioService:
             position["id"], user_id, payload.quantity,
             payload.price, payload.purchased_at.isoformat(),
             tx_currency, fx.rate, fx.rate_date.isoformat(),
+            payload.physical_form,
         )
         return await self._refresh_position(position["id"], asset)
 
@@ -291,6 +303,7 @@ class PortfolioService:
             fx_rate=fx_rate,
             fx_rate_date=r["fx_rate_date"],
             price_in_quote=float(price) * fx_rate if price is not None else None,
+            physical_form=r.get("physical_form"),
             purchased_at=r["purchased_at"],
             created_at=r["created_at"],
         )

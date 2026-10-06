@@ -4,7 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { useAuth } from './auth';
 import * as api from './api';
 import { ApiError } from './api';
-import type { AssetType, BaseCurrency, PortfolioPosition } from './types';
+import type { AssetType, BaseCurrency, PhysicalForm, PortfolioPosition } from './types';
 
 export type FeedConnectionMode = 'idle' | 'live' | 'polling';
 
@@ -23,6 +23,7 @@ interface AppState {
     price: number,
     purchasedAt: string,
     currency: string | null,
+    physicalForm?: PhysicalForm | null,
   ) => Promise<boolean>;
   removeAsset: (positionId: string) => Promise<void>;
 
@@ -158,6 +159,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       price: number,
       purchasedAt: string,
       currency: string | null,
+      physicalForm: PhysicalForm | null = null,
     ) => {
       const t = ticker.trim().toUpperCase();
       if (!t) return false;
@@ -169,6 +171,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           price,
           currency,
           purchased_at: purchasedAt,
+          physical_form: physicalForm,
         });
         // Świeżo dodane aktywo może nie mieć jeszcze snapshotu — dociągnij notowania.
         await api.refreshPrices().catch(() => {});

@@ -23,8 +23,10 @@ from src.marketdata.fx_repository import FxRepository
 from src.marketdata.historical import (
     BybitKlineProvider,
     HistoricalPriceService,
+    YahooChartProvider,
     stock_price_provider,
 )
+from src.marketdata.metals import MetalPriceProvider, MetalQuoteProvider
 from src.marketdata.providers import (
     BybitProvider,
     QuoteCurrencyResolver,
@@ -151,7 +153,8 @@ async def get_portfolio_history_service(
         yield PortfolioHistoryService(
             portfolio=PortfolioRepository(client),
             prices=HistoricalPriceService(
-                crypto=BybitKlineProvider(http), stocks=stock_price_provider(http)
+                crypto=BybitKlineProvider(http), stocks=stock_price_provider(http),
+                commodities=MetalPriceProvider(YahooChartProvider(http)),
             ),
             fx=FxService(default_fx_provider(http), FxRepository(writer_client)),
             settings=SettingsRepository(client),
@@ -219,7 +222,8 @@ async def get_historical_price_service() -> AsyncIterator[HistoricalPriceService
     # Stooq (zapasowe źródło) odpowiada przekierowaniem przy niektórych zapytaniach.
     async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as http:
         yield HistoricalPriceService(
-            crypto=BybitKlineProvider(http), stocks=stock_price_provider(http)
+            crypto=BybitKlineProvider(http), stocks=stock_price_provider(http),
+            commodities=MetalPriceProvider(YahooChartProvider(http)),
         )
 
 
@@ -242,6 +246,7 @@ async def get_market_data_service(
         yield MarketDataService(
             crypto=BybitProvider(http),
             stocks=stock_quote_provider(http, settings.finnhub_api_key),
+            commodities=MetalQuoteProvider(YahooQuoteProvider(http)),
             repo=MarketDataRepository(client),
         )
 

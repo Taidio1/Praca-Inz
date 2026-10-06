@@ -354,19 +354,30 @@ def stock_price_provider(client: httpx.AsyncClient) -> FallbackProvider:
 
 
 class HistoricalPriceService:
-    """Wybiera prowajdera po typie aktywa (crypto → Bybit, stock/etf → Yahoo/Stooq)."""
+    """Wybiera prowajdera po typie aktywa (crypto → Bybit, stock/etf → Yahoo/Stooq,
+    commodity → Yahoo COMEX)."""
 
     def __init__(
-        self, crypto: HistoricalPriceProvider, stocks: HistoricalPriceProvider
+        self,
+        crypto: HistoricalPriceProvider,
+        stocks: HistoricalPriceProvider,
+        commodities: HistoricalPriceProvider,
     ) -> None:
         self._crypto = crypto
         self._stocks = stocks
+        self._commodities = commodities
+
+    def _provider(self, asset_type: AssetType) -> HistoricalPriceProvider:
+        if asset_type == "crypto":
+            return self._crypto
+        if asset_type == "commodity":
+            return self._commodities
+        return self._stocks
 
     async def price_on(
         self, ticker: str, asset_type: AssetType, on: date
     ) -> HistoricalPrice:
-        provider = self._crypto if asset_type == "crypto" else self._stocks
-        return await provider.price_on(ticker, on)
+        return await self._provider(asset_type).price_on(ticker, on)
 
     async def price_series(
         self, ticker: str, asset_type: AssetType, days: int
@@ -377,7 +388,6 @@ class HistoricalPriceService:
         if cached and now - cached[0] < _SERIES_CACHE_TTL_SECONDS:
             return cached[1]
 
-        provider = self._crypto if asset_type == "crypto" else self._stocks
-        series = await provider.price_series(ticker, days)
+        series = await self._provider(asset_type).price_series(ticker, days)
         _SERIES_CACHE[key] = (now, series)
         return series

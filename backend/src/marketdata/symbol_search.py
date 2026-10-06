@@ -9,6 +9,7 @@ from typing import Any, Protocol
 import httpx
 import structlog
 
+from src.marketdata.metals import METALS
 from src.marketdata.providers import QuoteError, _get_json
 from src.marketdata.symbols import exchange_suffix
 from src.schemas.assets import AssetType
@@ -249,6 +250,7 @@ class AssetSearchService:
             return []
 
         tasks: list[tuple[str, Awaitable[list[SymbolMatch]]]] = [
+            ("metals", _search_metals(query)),
             ("local", self._search_local(query, limit)),
             ("bybit", self._crypto.search(query)),
             ("finnhub", self._stocks.search(query)),
@@ -277,6 +279,9 @@ class AssetSearchService:
     async def lookup(self, ticker: str, asset_type: AssetType) -> SymbolMatch | None:
         if asset_type == "crypto":
             return await self._crypto.lookup(ticker)
+        if asset_type == "commodity":
+            found = METALS.get(ticker.strip().upper())
+            return _metal_match(found.ticker) if found else None
         return await self._stocks.lookup(ticker, asset_type)
 
     async def _search_local(self, q: str, limit: int) -> list[SymbolMatch]:
@@ -289,6 +294,21 @@ class AssetSearchService:
             )
             for row in rows
         ]
+
+
+def _metal_match(ticker: str) -> SymbolMatch:
+    m = METALS[ticker]
+    return SymbolMatch(ticker=m.ticker, name=m.name, asset_type="commodity")
+
+
+async def _search_metals(query: str) -> list[SymbolMatch]:
+    """Metale fizyczne nie mają zewnętrznego katalogu; dopasowanie po tickerze i aliasach."""
+    q = query.casefold()
+    return [
+        _metal_match(m.ticker)
+        for m in METALS.values()
+        if any(alias.startswith(q) for alias in (m.ticker.casefold(), *m.aliases))
+    ]
 
 
 def _crypto_sort_key(item: SymbolMatch, query: str) -> tuple[int, str, str]:
@@ -316,4 +336,6 @@ def _asset_type_from_row(raw_type: object) -> AssetType:
         return "stock"
     if raw_type == "etf":
         return "etf"
+    if raw_type == "commodity":
+        return "commodity"
     raise SymbolSearchError(f"Niepoprawny typ aktywa w lokalnym katalogu: {raw_type}")

@@ -6,7 +6,7 @@ import * as api from '@/lib/api';
 import { ApiError } from '@/lib/api';
 import { useApp } from '@/lib/store';
 import type { AssetDetail, PortfolioTransaction, PricePoint } from '@/lib/types';
-import { ASSET_TYPE_LABELS } from '@/lib/types';
+import { ASSET_TYPE_LABELS, PHYSICAL_FORM_LABELS, qtyUnit } from '@/lib/types';
 import { formatPrice, formatTime, fmtCurrency, fmtSignedCurrency, sentBadgeStyle, sentColor, sentLabel, MONO } from '@/lib/format';
 import { CURRENCIES, fmtFxDate, fmtRate } from '@/lib/currency';
 import SentChart from '@/components/charts/SentChart';
@@ -327,7 +327,10 @@ export default function AssetDetailPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(128px,1fr))', gap: 8 }}>
             <div style={tileStyle}>
               <div style={tileLabelStyle}>Posiadana ilość</div>
-              <div style={tileValueStyle}>{position.quantity.toLocaleString('pl-PL')}</div>
+              <div style={tileValueStyle}>
+                {position.quantity.toLocaleString('pl-PL')}
+                {asset.asset_type === 'commodity' ? ' oz' : ''}
+              </div>
             </div>
             <div style={tileStyle}>
               <div style={tileLabelStyle}>Śr. cena nabycia</div>
@@ -375,6 +378,7 @@ export default function AssetDetailPage() {
           transactions={transactions ?? []}
           range={priceRange}
           onRangeChange={setPriceRange}
+          unit={qtyUnit(asset.asset_type)}
         />
       </div>
 
@@ -466,7 +470,12 @@ export default function AssetDetailPage() {
                   <span style={{ fontFamily: MONO, fontSize: 12, color: 'var(--fg-3)', minWidth: 82 }}>
                     {new Date(t.purchased_at).toLocaleDateString('pl-PL')}
                   </span>
-                  <span style={{ fontSize: 12, color: 'var(--fg)' }}>{t.quantity.toLocaleString('pl-PL')} szt.</span>
+                  <span style={{ fontSize: 12, color: 'var(--fg)' }}>
+                    {t.quantity.toLocaleString('pl-PL')} {qtyUnit(asset.asset_type)}
+                  </span>
+                  {t.physical_form && (
+                    <span style={{ fontSize: 10.5, color: 'var(--muted-2)' }}>{PHYSICAL_FORM_LABELS[t.physical_form]}</span>
+                  )}
                   <span style={{ fontSize: 12, color: 'var(--muted-2)' }}>po {formatPrice(t.price, t.currency)}</span>
                   {t.currency !== quoteCurrency && t.price != null && (
                     <span
@@ -527,7 +536,7 @@ export default function AssetDetailPage() {
               Razem
             </span>
             <span style={{ fontFamily: MONO, fontSize: 12.5, color: 'var(--fg)' }}>
-              {totalQty.toLocaleString('pl-PL')} szt. · {fmtCurrency(totalValue, quoteCurrency)}
+              {totalQty.toLocaleString('pl-PL')} {qtyUnit(asset.asset_type)} · {fmtCurrency(totalValue, quoteCurrency)}
             </span>
           </div>
         </div>

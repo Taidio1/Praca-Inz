@@ -12,9 +12,10 @@ export const ASSET_GROUPS: Record<AssetType, { label: string; badge: string; col
   stock: { label: 'Akcje', badge: 'AK', color: 'var(--cat1)' },
   etf: { label: 'ETF', badge: 'ET', color: 'var(--cat6)' },
   crypto: { label: 'Kryptowaluty', badge: 'KR', color: 'var(--cat4)' },
+  commodity: { label: 'Metale fizyczne', badge: 'MT', color: 'var(--cat5)' },
 };
 
-const DEFAULT_ORDER: AssetType[] = ['stock', 'etf', 'crypto'];
+const DEFAULT_ORDER: AssetType[] = ['stock', 'etf', 'crypto', 'commodity'];
 const ORDER_KEY = 'opes-nav-group-order';
 
 function readOrder(): AssetType[] {

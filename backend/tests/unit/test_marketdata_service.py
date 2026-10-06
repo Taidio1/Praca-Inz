@@ -33,11 +33,13 @@ def make_service(
     assets: list[dict],  # type: ignore[type-arg]
     crypto_quotes: dict[str, Quote] | None = None,
     stock_quotes: dict[str, Quote] | None = None,
+    metal_quotes: dict[str, Quote] | None = None,
 ) -> tuple[MarketDataService, FakeMarketRepo]:
     repo = FakeMarketRepo(assets)
     svc = MarketDataService(
         crypto=FakeProvider(crypto_quotes or {}),
         stocks=FakeProvider(stock_quotes or {}),
+        commodities=FakeProvider(metal_quotes or {}),
         repo=repo,
     )
     return svc, repo
@@ -71,3 +73,14 @@ async def test_etf_uses_stock_provider() -> None:
     svc, repo = make_service([etf], stock_quotes={"SPY": Quote(price=550.0, change_24h=0.4)})
     assert await svc.refresh_all() == 1
     assert repo.snapshots[0]["price"] == 550.0
+
+
+async def test_commodity_uses_metal_provider() -> None:
+    xau = {"id": "aaaaaaaa-0000-0000-0000-000000000004", "ticker": "XAU", "asset_type": "commodity"}
+    svc, repo = make_service(
+        [xau],
+        stock_quotes={"XAU": Quote(price=1.0, change_24h=None)},
+        metal_quotes={"XAU": Quote(price=2400.0, change_24h=0.5)},
+    )
+    assert await svc.refresh_all() == 1
+    assert repo.snapshots[0]["price"] == 2400.0

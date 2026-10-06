@@ -185,7 +185,7 @@ class FakeSeriesProvider(FakeProvider):
 
 async def test_service_price_series_routes_crypto_and_stocks() -> None:
     crypto, stocks = FakeSeriesProvider(1.0), FakeSeriesProvider(2.0)
-    svc = HistoricalPriceService(crypto=crypto, stocks=stocks)
+    svc = HistoricalPriceService(crypto=crypto, stocks=stocks, commodities=FakeSeriesProvider(3.0))
     crypto_series = await svc.price_series("BTC", "crypto", 30)
     stock_series = await svc.price_series("AAPL", "stock", 90)
     assert crypto_series[0].price == 1.0
@@ -196,7 +196,9 @@ async def test_service_price_series_routes_crypto_and_stocks() -> None:
 
 async def test_service_price_series_serves_repeated_calls_from_cache() -> None:
     crypto = FakeSeriesProvider(1.0)
-    svc = HistoricalPriceService(crypto=crypto, stocks=FakeSeriesProvider(2.0))
+    svc = HistoricalPriceService(
+        crypto=crypto, stocks=FakeSeriesProvider(2.0), commodities=FakeSeriesProvider(3.0)
+    )
     first = await svc.price_series("BTC", "crypto", 30)
     second = await svc.price_series("btc", "crypto", 30)
     assert first == second
@@ -205,7 +207,7 @@ async def test_service_price_series_serves_repeated_calls_from_cache() -> None:
 
 async def test_service_price_series_cache_keyed_by_ticker_type_and_range() -> None:
     crypto, stocks = FakeSeriesProvider(1.0), FakeSeriesProvider(2.0)
-    svc = HistoricalPriceService(crypto=crypto, stocks=stocks)
+    svc = HistoricalPriceService(crypto=crypto, stocks=stocks, commodities=FakeSeriesProvider(3.0))
     await svc.price_series("BTC", "crypto", 30)
     await svc.price_series("BTC", "crypto", 90)
     await svc.price_series("ETH", "crypto", 30)
@@ -215,14 +217,16 @@ async def test_service_price_series_cache_keyed_by_ticker_type_and_range() -> No
 
 
 async def test_service_routes_crypto_and_stocks() -> None:
-    crypto, stocks = FakeProvider(1.0), FakeProvider(2.0)
-    svc = HistoricalPriceService(crypto=crypto, stocks=stocks)
+    crypto, stocks, metals = FakeProvider(1.0), FakeProvider(2.0), FakeProvider(3.0)
+    svc = HistoricalPriceService(crypto=crypto, stocks=stocks, commodities=metals)
     d = date(2026, 7, 3)
     assert (await svc.price_on("BTC", "crypto", d)).price == 1.0
     assert (await svc.price_on("AAPL", "stock", d)).price == 2.0
     assert (await svc.price_on("SPY", "etf", d)).price == 2.0
+    assert (await svc.price_on("XAU", "commodity", d)).price == 3.0
     assert crypto.calls == ["BTC"]
     assert stocks.calls == ["AAPL", "SPY"]
+    assert metals.calls == ["XAU"]
 
 
 # ─── Yahoo chart + fallback ──────────────────────────────────────────────────

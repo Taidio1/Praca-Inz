@@ -14,6 +14,7 @@ interface PriceChartProps {
   transactions: PortfolioTransaction[];
   range: PriceRange;
   onRangeChange: (range: PriceRange) => void;
+  unit?: string; // jednostka ilości w znacznikach transakcji
 }
 
 function rangeBtnStyle(active: boolean): React.CSSProperties {
@@ -35,7 +36,14 @@ function formatAxisDate(iso: string): string {
 }
 
 /* Linia dziennego close + markery zakupów pozycjonowane po dacie; brak linii break-even (poza zakresem MVP). */
-export default function PriceChart({ currency, points, transactions, range, onRangeChange }: PriceChartProps) {
+export default function PriceChart({
+  currency,
+  points,
+  transactions,
+  range,
+  onRangeChange,
+  unit = 'szt.',
+}: PriceChartProps) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const sorted = useMemo(
@@ -183,7 +191,7 @@ export default function PriceChart({ currency, points, transactions, range, onRa
               boxShadow: '0 4px 14px rgba(0,0,0,.3)',
             }}
           >
-            <div style={{ fontWeight: 600 }}>{hovered.tx.quantity.toLocaleString('pl-PL')} szt.</div>
+            <div style={{ fontWeight: 600 }}>{hovered.tx.quantity.toLocaleString('pl-PL')} {unit}</div>
             <div style={{ color: 'var(--muted-2)' }}>
               {hovered.tx.price != null ? `po ${formatPrice(hovered.tx.price, hovered.tx.currency)}` : 'brak ceny'}
             </div>

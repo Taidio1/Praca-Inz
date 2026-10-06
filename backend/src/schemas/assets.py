@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from src.schemas.insights import InsightOut
 
-AssetType = Literal["crypto", "stock", "etf"]
+AssetType = Literal["crypto", "stock", "etf", "commodity"]
 
 
 class AssetOut(BaseModel):

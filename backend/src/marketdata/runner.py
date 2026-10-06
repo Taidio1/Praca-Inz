@@ -12,7 +12,8 @@ from supabase import acreate_client
 
 from src.core.config import get_settings
 from src.core.logging import configure_logging
-from src.marketdata.providers import BybitProvider, stock_quote_provider
+from src.marketdata.metals import MetalQuoteProvider
+from src.marketdata.providers import BybitProvider, YahooQuoteProvider, stock_quote_provider
 from src.marketdata.repository import MarketDataRepository
 from src.marketdata.service import MarketDataService
 
@@ -31,6 +32,7 @@ async def main() -> None:
         service = MarketDataService(
             crypto=BybitProvider(http),
             stocks=stock_quote_provider(http, settings.finnhub_api_key),
+            commodities=MetalQuoteProvider(YahooQuoteProvider(http)),
             repo=MarketDataRepository(client),
         )
         log.info("marketdata_worker_started", interval=settings.market_refresh_seconds)

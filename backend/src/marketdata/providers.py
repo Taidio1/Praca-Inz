@@ -170,7 +170,7 @@ def stock_quote_provider(client: httpx.AsyncClient, finnhub_api_key: str) -> Quo
 
 
 class QuoteCurrencyResolver:
-    """Ustala walutę notowania aktywa: krypto → USD (pary USDT), akcje/ETF → Yahoo meta.currency.
+    """Ustala walutę notowania aktywa: krypto i metale → USD, akcje/ETF → Yahoo meta.currency.
 
     Gdy Yahoo nie odpowiada, ticker bez sufiksu giełdy to rynek USA (konwencja Finnhub),
     więc USD. Dla innych rynków bez odpowiedzi źródła waluty nie zgadujemy.
@@ -180,7 +180,7 @@ class QuoteCurrencyResolver:
         self._yahoo = yahoo
 
     async def quote_currency(self, ticker: str, asset_type: AssetType) -> str:
-        if asset_type == "crypto":
+        if asset_type in ("crypto", "commodity"):  # pary USDT, metale w USD za uncję
             return "USD"
         try:
             currency = (await self._yahoo.quote(ticker)).currency

@@ -6,7 +6,7 @@ import Sparkline from '@/components/charts/Sparkline';
 import { SentimentBar } from './PortfolioKpis';
 import { useSparklines } from './useSparklines';
 import type { PositionMetrics } from '@/lib/portfolio';
-import { ASSET_TYPE_LABELS, type AssetType, type PricePoint } from '@/lib/types';
+import { ASSET_TYPE_LABELS, qtyUnit, type AssetType, type PricePoint } from '@/lib/types';
 import {
   fmtPriceExact,
   fmtQty,
@@ -26,6 +26,7 @@ const CHIP_CLASS: Record<AssetType, string> = {
   crypto: s.chipCrypto,
   stock: s.chipStock,
   etf: s.chipEtf,
+  commodity: s.chipMetal,
 };
 
 const FILTERS: { value: Filter; label: string }[] = [
@@ -33,6 +34,7 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: 'crypto', label: 'Krypto' },
   { value: 'stock', label: 'Akcje' },
   { value: 'etf', label: 'ETF' },
+  { value: 'commodity', label: 'Metale' },
 ];
 
 const COLUMNS: { key: SortKey | null; label: string; sortable: boolean }[] = [
@@ -195,7 +197,9 @@ export default function PositionsTable({ rows, onDelete }: PositionsTableProps) 
           <span className={CHIP_CLASS[row.position.asset.asset_type]}>
             {ASSET_TYPE_LABELS[row.position.asset.asset_type]}
           </span>
-          <span className="mono num">{fmtQty(row.position.quantity)} szt.</span>
+          <span className="mono num">
+            {fmtQty(row.position.quantity)} {qtyUnit(row.position.asset.asset_type)}
+          </span>
         </div>
       </div>
     </div>

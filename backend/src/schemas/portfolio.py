@@ -1,10 +1,14 @@
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
 from src.marketdata.fx import SUPPORTED_CURRENCIES
 from src.schemas.assets import AssetOut, AssetType, SnapshotOut
+
+# Forma fizycznego metalu (moneta, sztabka, inna); tylko opis, wycena zawsze po cenie spot.
+PhysicalForm = Literal["coin", "bar", "other"]
 
 
 def _check_currency(v: str | None) -> str | None:
@@ -24,6 +28,8 @@ class PositionCreate(BaseModel):
     # Waluta, w której podano cenę; brak = waluta notowania aktywa
     currency: str | None = None
     purchased_at: date = Field(default_factory=date.today)
+    # Tylko asset_type="commodity": ilość w uncjach trojańskich, cena za uncję
+    physical_form: PhysicalForm | None = None
 
     @field_validator("purchased_at")
     @classmethod
@@ -46,6 +52,7 @@ class TransactionOut(BaseModel):
     fx_rate: float  # kurs waluty transakcji → waluty notowania z dnia zakupu
     fx_rate_date: date
     price_in_quote: float | None = None  # cena przeliczona na walutę notowania
+    physical_form: PhysicalForm | None = None
     purchased_at: date
     created_at: datetime
 

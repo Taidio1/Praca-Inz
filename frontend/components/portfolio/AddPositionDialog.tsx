@@ -9,7 +9,8 @@ import * as api from '@/lib/api';
 import { useApp } from '@/lib/store';
 import { fmtPriceExact, fmtSignedPct } from '@/lib/format';
 import { fmtFxDate, fmtRate, fxSourceLabel } from '@/lib/currency';
-import type { AssetSearchResult, AssetType, FxRate, PortfolioPosition } from '@/lib/types';
+import { PHYSICAL_FORM_LABELS, TROY_OUNCE_GRAMS } from '@/lib/types';
+import type { AssetSearchResult, AssetType, FxRate, PhysicalForm, PortfolioPosition } from '@/lib/types';
 import s from './portfolio.module.css';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -28,7 +29,15 @@ const ASSET_CLASS: Record<AssetType, { label: string; color: string }> = {
   crypto: { label: 'Kryptowaluty', color: 'var(--accent)' },
   stock: { label: 'Akcje', color: 'var(--pos)' },
   etf: { label: 'Fundusze ETF', color: 'var(--fg-4)' },
+  commodity: { label: 'Metale fizyczne', color: 'var(--cat5)' },
 };
+
+/** Jednostka ilości fizycznego metalu; w bazie zawsze uncje trojańskie. */
+type MetalUnit = 'oz' | 'g';
+
+const OZ_PER_UNIT: Record<MetalUnit, number> = { oz: 1, g: 1 / TROY_OUNCE_GRAMS };
+
+const PHYSICAL_FORMS = Object.keys(PHYSICAL_FORM_LABELS) as PhysicalForm[];
 
 /** Pole, z którego liczone są pozostałe: ilość, wartość albo % portfela. */
 type AnchorField = 'quantity' | 'value' | 'pct';
@@ -106,6 +115,13 @@ export default function AddPositionDialog({
   const [priceNonce, setPriceNonce] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
+  const [metalUnit, setMetalUnit] = useState<MetalUnit>('oz');
+  const [physicalForm, setPhysicalForm] = useState<PhysicalForm>('coin');
+
+  const isMetal = asset?.asset_type === 'commodity';
+  // Ile uncji to jedna jednostka wpisana w formularzu; cena i ilość w polach są w tej jednostce.
+  const ozPerUnit = isMetal ? OZ_PER_UNIT[metalUnit] : 1;
+  const unitLabel = isMetal ? metalUnit : 'szt.';
 
   const existing = useMemo(
     () =>
@@ -126,7 +142,9 @@ export default function AddPositionDialog({
   );
 
   const quoteCurrency =
-    existing?.currency ?? (asset?.asset_type === 'crypto' ? 'USD' : null) ?? fetchedQuoteCurrency;
+    existing?.currency ??
+    (asset?.asset_type === 'crypto' || asset?.asset_type === 'commodity' ? 'USD' : null) ??
+    fetchedQuoteCurrency;
   const currency = txCurrency ?? quoteCurrency;
   const converted = currency != null && quoteCurrency != null && currency !== quoteCurrency;
 
@@ -216,16 +234,30 @@ export default function AddPositionDialog({
     };
   }, [currency, baseCurrency]);
 
-  // Automatyczna cena trafia do pola dopiero przeliczona na walutę transakcji.
+  // Automatyczna cena trafia do pola dopiero przeliczona na walutę transakcji
+  // (i dla metali na wybraną jednostkę: notowanie jest za uncję).
   useEffect(() => {
     if (priceTouched || !autoPrice || autoPrice.date !== date) return;
+    const perUnit = autoPrice.price * ozPerUnit;
     if (!converted) {
-      setPrice(fmtInput(autoPrice.price, 8));
+      setPrice(fmtInput(perUnit, 8));
       return;
     }
-    if (txFx && txFx.requested_date === date) setPrice(fmtInput(autoPrice.price * txFx.rate, 8));
+    if (txFx && txFx.requested_date === date) setPrice(fmtInput(perUnit * txFx.rate, 8));
     else setPrice('');
-  }, [autoPrice, converted, txFx, date, priceTouched]);
+  }, [autoPrice, converted, txFx, date, priceTouched, ozPerUnit]);
+
+  // Zmiana jednostki przelicza wpisane wartości, żeby nie zmieniła się wartość transakcji.
+  const changeMetalUnit = (next: MetalUnit) => {
+    if (next === metalUnit) return;
+    const ratio = OZ_PER_UNIT[next] / OZ_PER_UNIT[metalUnit];
+    const typedPrice = toNumber(price);
+    if (priceTouched && typedPrice != null) setPrice(fmtInput(typedPrice * ratio, 8));
+    const typedQty = toNumber(anchor.raw);
+    if (anchor.field === 'quantity' && typedQty != null)
+      setAnchor({ field: 'quantity', raw: fmtInput(typedQty / ratio, 8) });
+    setMetalUnit(next);
+  };
 
   const toBase = currency === baseCurrency ? 1 : baseFx?.rate ?? null;
   const parsedPrice = toNumber(price);
@@ -263,13 +295,15 @@ export default function AddPositionDialog({
 
     setSubmitting(true);
     try {
+      // Backend trzyma metale w uncjach trojańskich i cenie za uncję.
       const added = await addAsset(
         asset.ticker,
         asset.asset_type,
-        parsedQuantity,
-        parsedPrice,
+        parsedQuantity * ozPerUnit,
+        parsedPrice / ozPerUnit,
         date,
         converted ? currency : null,
+        isMetal ? physicalForm : null,
       );
       if (added) onClose();
     } finally {
@@ -292,6 +326,8 @@ export default function AddPositionDialog({
     setPriceTouched(false);
     setPriceFetchFailed(false);
     setErrors({});
+    setMetalUnit('oz');
+    setPhysicalForm('coin');
   };
 
   // Po zmianie kroku poprzedni element z fokusem znika; przenosimy fokus do nowego kroku,
@@ -315,7 +351,10 @@ export default function AddPositionDialog({
             </div>
             {quote && (
               <div className={s.instrumentQuote}>
-                <b className="mono num">{fmtPriceExact(quote.price, quoteCurrency)}</b>
+                <b className="mono num">
+                  {fmtPriceExact(quote.price, quoteCurrency)}
+                  {isMetal ? ' / oz' : ''}
+                </b>
                 {quote.change != null && (
                   <span className={quote.change >= 0 ? s.pillUp : s.pillDown}>{fmtSignedPct(quote.change)}</span>
                 )}
@@ -351,10 +390,50 @@ export default function AddPositionDialog({
           />
         </OField>
 
+        {isMetal && (
+          <div className={s.formGrid}>
+            <OField label="Forma">
+              <div className={s.seg} role="group" aria-label="Forma fizycznego metalu">
+                {PHYSICAL_FORMS.map(f => (
+                  <button
+                    key={f}
+                    type="button"
+                    className={s.segBtn}
+                    aria-pressed={physicalForm === f}
+                    onClick={() => setPhysicalForm(f)}
+                  >
+                    {PHYSICAL_FORM_LABELS[f]}
+                  </button>
+                ))}
+              </div>
+            </OField>
+            <OField label="Jednostka">
+              <div className={s.seg} role="group" aria-label="Jednostka ilości">
+                <button
+                  type="button"
+                  className={s.segBtn}
+                  aria-pressed={metalUnit === 'oz'}
+                  onClick={() => changeMetalUnit('oz')}
+                >
+                  Uncje (oz)
+                </button>
+                <button
+                  type="button"
+                  className={s.segBtn}
+                  aria-pressed={metalUnit === 'g'}
+                  onClick={() => changeMetalUnit('g')}
+                >
+                  Gramy (g)
+                </button>
+              </div>
+            </OField>
+          </div>
+        )}
+
         <hr className={s.formDivider} />
 
         <div className={s.formGrid}>
-          <OField label="Ilość" htmlFor="add-quantity" error={errors.quantity}>
+          <OField label={isMetal ? `Ilość (${unitLabel})` : 'Ilość'} htmlFor="add-quantity" error={errors.quantity}>
             <input
               id="add-quantity"
               className={s.ofieldInput}
@@ -392,7 +471,10 @@ export default function AddPositionDialog({
                 setPriceTouched(true);
               }}
             />
-            <span className={s.ofieldSuffix}>{currency ?? ''}</span>
+            <span className={s.ofieldSuffix}>
+              {currency ?? ''}
+              {isMetal ? `/${unitLabel}` : ''}
+            </span>
             <button
               type="button"
               className={s.iconBtn}
@@ -469,6 +551,14 @@ export default function AddPositionDialog({
           </p>
         )}
 
+        {isMetal && (
+          <p className={s.fxNote}>
+            Wycena według ceny kontraktu COMEX z Yahoo (przybliżenie ceny spot za uncję trojańską, 1 oz ={' '}
+            {TROY_OUNCE_GRAMS.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} g). Forma zakupu jest zapisywana
+            tylko informacyjnie: premię ponad spot uwzględnia cena zakupu, którą możesz poprawić.
+          </p>
+        )}
+
         <OField label="Klasa aktywów">
           <div className={s.currency}>
             <span className={s.classDot} style={{ background: ASSET_CLASS[asset.asset_type].color }} />
@@ -480,7 +570,7 @@ export default function AddPositionDialog({
 
         {existing && (
           <p className={s.dialogText} style={{ color: 'var(--accent)', margin: 0 }}>
-            Masz już {existing.quantity} szt. {existing.asset.ticker}. Zapiszemy dokupienie i przeliczymy średnią
+            Masz już {isMetal ? `${fmtInput(existing.quantity, 4)} oz` : `${existing.quantity} szt.`} {existing.asset.ticker}. Zapiszemy dokupienie i przeliczymy średnią
             cenę nabycia.
           </p>
         )}

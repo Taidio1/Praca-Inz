@@ -20,9 +20,15 @@ class MarketDataService:
     """Pobiera notowania dla aktywów z portfeli i zapisuje snapshoty do bazy."""
 
     def __init__(
-        self, crypto: QuoteProvider, stocks: QuoteProvider, repo: MarketRepo
+        self,
+        crypto: QuoteProvider,
+        stocks: QuoteProvider,
+        commodities: QuoteProvider,
+        repo: MarketRepo,
     ) -> None:
-        self._crypto = crypto
+        self._providers: dict[str, QuoteProvider] = {
+            "crypto": crypto, "commodity": commodities,
+        }
         self._stocks = stocks
         self._repo = repo
 
@@ -30,7 +36,7 @@ class MarketDataService:
         assets = await self._repo.assets_in_portfolios()
         written = 0
         for asset in assets:
-            provider = self._crypto if asset["asset_type"] == "crypto" else self._stocks
+            provider = self._providers.get(asset["asset_type"], self._stocks)
             try:
                 quote = await provider.quote(asset["ticker"])
             except QuoteError as exc:

@@ -1,6 +1,22 @@
 /* Typy odpowiedzi API — odwzorowanie schematów Pydantic z backend/src/schemas/. */
 
-export type AssetType = 'crypto' | 'stock' | 'etf';
+export type AssetType = 'crypto' | 'stock' | 'etf' | 'commodity';
+
+/* Fizyczny metal (commodity): ilość w uncjach trojańskich, cena za uncję. */
+export type PhysicalForm = 'coin' | 'bar' | 'other';
+
+export const PHYSICAL_FORM_LABELS: Record<PhysicalForm, string> = {
+  coin: 'Monety',
+  bar: 'Sztabki',
+  other: 'Inna forma',
+};
+
+export const TROY_OUNCE_GRAMS = 31.1034768;
+
+/* Jednostka ilości pozycji: metale w uncjach, reszta w sztukach. */
+export function qtyUnit(type: AssetType): string {
+  return type === 'commodity' ? 'oz' : 'szt.';
+}
 
 export interface ApiAsset {
   id: string;
@@ -99,6 +115,7 @@ export interface PositionCreate {
   price: number | null;
   currency: string | null; // waluta ceny; null = waluta notowania
   purchased_at: string; // YYYY-MM-DD
+  physical_form?: PhysicalForm | null; // tylko commodity
 }
 
 export interface PortfolioTransaction {
@@ -109,6 +126,7 @@ export interface PortfolioTransaction {
   fx_rate: number; // kurs waluty transakcji → waluty notowania z dnia zakupu
   fx_rate_date: string;
   price_in_quote: number | null;
+  physical_form: PhysicalForm | null;
   purchased_at: string; // YYYY-MM-DD
   created_at: string;
 }
@@ -182,6 +200,7 @@ export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   crypto: 'krypto',
   stock: 'akcja',
   etf: 'ETF',
+  commodity: 'metal',
 };
 
 /* ─── Analiza spółek (backend/src/schemas/analysis.py) ─── */
