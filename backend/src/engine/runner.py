@@ -1,4 +1,4 @@
-"""Worker silnika informacyjnego: co ENGINE_INTERVAL_SECONDS cykl ingest -> ocena trafności.
+"""Worker silnika: co ENGINE_INTERVAL_SECONDS cykl ingest -> ocena trafności -> synteza LLM.
 
 Uruchomienie: cd backend && python -m src.engine.runner
 Wymaga w .env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY; opcjonalnie FINNHUB_API_KEY
@@ -22,8 +22,11 @@ from src.relevance.service import RelevanceService
 from src.repositories.engine import EngineRepository
 from src.repositories.ingest import IngestRepository
 from src.repositories.relevance import RelevanceRepository
+from src.repositories.synthesis import SynthesisRepository
 from src.sources.registry import build_sources
 from src.synthesis.provider import AnthropicProvider
+from src.synthesis.service import SynthesisService
+from src.synthesis.trigger import TriggerRules
 
 log = structlog.get_logger(__name__)
 
@@ -60,9 +63,28 @@ async def main() -> None:
             batch_size=settings.relevance_batch_size,
             lookback_hours=settings.ingest_lookback_hours,
         )
+        synthesis = SynthesisService(
+            SynthesisRepository(client),
+            ingest_repo,
+            provider,
+            rules=TriggerRules(
+                important_score=settings.synth_important_score,
+                batch_min=settings.synth_batch_min,
+                daily_hours=settings.synth_daily_hours,
+                max_per_day=settings.synth_max_per_asset_day,
+                min_gap_minutes=settings.synth_min_gap_minutes,
+            ),
+            threshold=settings.relevance_threshold,
+            lookback_hours=settings.ingest_lookback_hours,
+            max_items=settings.synth_max_items,
+            max_per_cycle=settings.synth_max_per_cycle,
+            budget_usd=settings.llm_daily_budget_usd,
+            reserve_usd=settings.synth_cost_reserve_usd,
+        )
         stages: list[tuple[str, Stage]] = [
             ("ingest", IngestService(build_sources(http, settings), ingest_repo)),
             ("relevance", relevance),
+            ("synthesis", synthesis),
         ]
         log.info("engine_worker_started", interval=settings.engine_interval_seconds)
         await run_loop(stages, EngineRepository(client), settings.engine_interval_seconds)

@@ -1,0 +1,10 @@
+{
+ "asset": "QQQ",
+ "allowed_ids": [
+  "n1",
+  "n2",
+  "n3",
+  "n4"
+ ],
+ "response": "{\"title\":\"QQQ wykazuje stabilność przy wciąż wąskiej partycypacji rynkowej\",\"summary\":\"Sentyment wobec QQQ pozostaje byczi, a indeks utrzymuje stabilność przed publikacją notatek Fed, jednak wzrost napędzany jest wąskim grona spółek technologicznych. Międzynarodowe rynki wyraźnie przerósł w 2026 roku rynek amerykański, co sugeruje względną niedowaluację ekspozycji na US tech. Słaby uział małych spółek i niskie partycypację średnioruchowych średnich utrzymują ogólny trend na neutralnym poziomie, wymuszając ostrożność mimo bullish nastrojów retail.\",\"sentiment_score\":0.15,\"sentiment_label\":\"neutral\",\"key_item_ids\":[\"n1\",\"n4\",\"n2\"],\"price_context\":\"Wzrost QQQ o 0,88% w ciągu 24 godzin odzwierciedla stopniową stabilizację na tle wciąż wąskiej partycypacji rynkowej i oczekiwania na decyzje Fed.\"}"
+}

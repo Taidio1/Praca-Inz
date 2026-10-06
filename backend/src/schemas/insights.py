@@ -22,6 +22,7 @@ class InsightOut(BaseModel):
     price_context: str | None = None
     created_at: datetime
     key_items: list[InsightSourceOut]
+    trigger: str | None = None  # important | batch | daily
 
 
 class TraceOut(BaseModel):

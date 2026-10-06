@@ -42,6 +42,7 @@ export interface Insight {
   price_context: string | null;
   created_at: string;
   key_items: InsightSource[];
+  trigger: 'important' | 'batch' | 'daily' | null;
 }
 
 export interface FeedPage {
@@ -356,11 +357,17 @@ export interface SourcePage {
 export interface EngineCycle {
   started_at: string;
   finished_at: string | null;
-  stats: { ingest?: { tracked_assets: number; fetched: number; inserted: number; duplicates: number; per_source: Record<string, number> } };
+  stats: {
+    synthesis?: { created: number; waiting: Record<string, string>; budget_exhausted: boolean };
+    ingest?: { tracked_assets: number; fetched: number; inserted: number; duplicates: number; per_source: Record<string, number> } };
   errors: Record<string, string>;
 }
 
 export interface EngineStatus {
   last_cycle: EngineCycle | null;
   failing_sources: { key: string; last_fetched_at: string | null; consecutive_failures: number; last_error: string | null }[];
+  cost_today_usd: number;
+  cost_month_usd: number;
+  daily_budget_usd: number;
+  budget_exhausted: boolean;
 }

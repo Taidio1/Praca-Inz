@@ -55,6 +55,10 @@ class FakeEngine:
     async def failing_states(self, limit: int = 20) -> list[dict[str, Any]]:
         return self.failing
 
+    async def cost_since(self, since: datetime) -> float:
+        # od północy UTC 6.10 (dzień) vs od 1.10 (miesiąc)
+        return 0.59 if since.day == 6 else 2.4
+
 
 class FakePortfolio:
     async def list_positions(self) -> list[dict[str, Any]]:
@@ -76,7 +80,8 @@ def make(
 ) -> tuple[SourcesService, FakeAudit]:
     audit = FakeAudit(rows)
     svc = SourcesService(audit=audit, engine=engine or FakeEngine(None, []),
-                         portfolio=FakePortfolio(), settings=FakeSettings(threshold))
+                         portfolio=FakePortfolio(), settings=FakeSettings(threshold),
+                         daily_budget_usd=0.60)
     return svc, audit
 
 
@@ -155,3 +160,22 @@ async def test_items_carry_publisher_name_as_outlet() -> None:
     page = await svc.list_items(status="all", asset_id=None, cursor=None, limit=5)
     assert page.items[0].outlet == "Motley Fool"
     assert audit.outlet_ids == [ITEM["id"]]
+
+
+async def test_engine_status_reports_costs_and_budget() -> None:
+    svc, _ = make([])
+    status = await svc.engine_status(now=datetime(2026, 10, 6, 12, 0, tzinfo=UTC))
+    assert (status.cost_today_usd, status.cost_month_usd) == (0.59, 2.4)
+    assert status.daily_budget_usd == 0.60
+    # ta sama reguła co w silniku (Budget): 0.59 + rezerwa 0.01 mieści się w limicie
+    assert status.budget_exhausted is False
+
+
+async def test_engine_status_budget_exhausted_like_engine() -> None:
+    class SpentEngine(FakeEngine):
+        async def cost_since(self, since: datetime) -> float:
+            return 0.595
+
+    svc, _ = make([], engine=SpentEngine(None, []))
+    status = await svc.engine_status(now=datetime(2026, 10, 6, 12, 0, tzinfo=UTC))
+    assert status.budget_exhausted is True

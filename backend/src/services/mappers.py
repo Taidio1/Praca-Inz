@@ -48,4 +48,5 @@ def insight_from_row(row: dict[str, Any]) -> InsightOut:
         price_context=row.get("price_context"),
         created_at=row["created_at"],
         key_items=key_items,
+        trigger=row.get("trigger"),
     )

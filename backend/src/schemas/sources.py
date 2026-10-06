@@ -62,6 +62,10 @@ class SourceHealthOut(BaseModel):
 class EngineStatusOut(BaseModel):
     last_cycle: EngineCycleOut | None = None
     failing_sources: list[SourceHealthOut]
+    cost_today_usd: float = 0
+    cost_month_usd: float = 0
+    daily_budget_usd: float = 0
+    budget_exhausted: bool = False
 
 
 class FunnelOut(BaseModel):

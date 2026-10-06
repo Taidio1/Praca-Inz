@@ -46,6 +46,16 @@ class Settings(BaseSettings):
     llm_model: str = "claude-haiku-4-5"
     # USD za 1M tokenów [wejście, wyjście], stan cennika 2026-09-25
     llm_pricing: str = '{"claude-haiku-4-5": [1.0, 5.0], "claude-sonnet-5-5": [2.0, 10.0]}'
+    # Synteza LLM (spec §5): wyzwalacze i bezpieczniki kosztu
+    llm_daily_budget_usd: float = 0.60
+    synth_important_score: float = 0.85
+    synth_batch_min: int = 3
+    synth_daily_hours: int = 24
+    synth_max_per_asset_day: int = 6
+    synth_min_gap_minutes: int = 30
+    synth_max_items: int = 10
+    synth_max_per_cycle: int = 10
+    synth_cost_reserve_usd: float = 0.01
 
     @property
     def cors_origins(self) -> list[str]:

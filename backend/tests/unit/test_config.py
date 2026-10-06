@@ -53,3 +53,11 @@ def test_weights_must_be_two_numbers() -> None:
                  _env_file=None)
     with pytest.raises(ValueError, match="RELEVANCE_WEIGHTS"):
         _ = s.weights
+
+
+def test_synthesis_settings_defaults() -> None:
+    s = Settings(supabase_url="http://x", supabase_anon_key="a", _env_file=None)
+    assert s.llm_daily_budget_usd == 0.60
+    assert (s.synth_important_score, s.synth_batch_min, s.synth_daily_hours) == (0.85, 3, 24)
+    assert (s.synth_max_per_asset_day, s.synth_min_gap_minutes) == (6, 30)
+    assert (s.synth_max_items, s.synth_max_per_cycle, s.synth_cost_reserve_usd) == (10, 10, 0.01)

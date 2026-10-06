@@ -191,12 +191,15 @@ async def get_asset_service(
 
 async def get_sources_service(
     client: Annotated[AsyncClient, Depends(get_supabase)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> SourcesService:
     return SourcesService(
         audit=SourceItemsRepository(client),
         engine=EngineRepository(client),
         portfolio=PortfolioRepository(client),
         settings=SettingsRepository(client),
+        daily_budget_usd=settings.llm_daily_budget_usd,
+        cost_reserve_usd=settings.synth_cost_reserve_usd,
     )
 
 

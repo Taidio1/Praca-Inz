@@ -427,7 +427,9 @@ async def test_engine_status_endpoint(app: FastAPI) -> None:
     async with client_for(app) as client:
         res = await client.get("/api/v1/engine/status")
     assert res.status_code == 200
-    assert res.json() == {"last_cycle": None, "failing_sources": []}
+    body = res.json()
+    assert body["last_cycle"] is None and body["failing_sources"] == []
+    assert body["budget_exhausted"] is False and "cost_today_usd" in body
 
 
 async def test_sources_rejects_unknown_status(app: FastAPI) -> None:

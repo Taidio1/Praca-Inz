@@ -8,6 +8,19 @@ import { ApiError } from '@/lib/api';
 import type { Insight } from '@/lib/types';
 import { ASSET_TYPE_LABELS } from '@/lib/types';
 import { formatTime, relChipStyle, sentBadgeStyle, sentBarStyle, sentLabel, MONO } from '@/lib/format';
+import EngineStatusBar from '@/components/sources/EngineStatusBar';
+
+const TRIGGER_LABEL: Record<string, string> = {
+  important: 'ważne wydarzenie',
+  batch: 'paczka newsów',
+  daily: 'podsumowanie dnia',
+};
+
+function triggerText(card: Insight): string | null {
+  if (!card.trigger) return null;
+  if (card.trigger === 'batch') return `paczka ${card.key_items.length} newsów`;
+  return TRIGGER_LABEL[card.trigger] ?? card.trigger;
+}
 
 const PAGE_SIZE = 20;
 
@@ -124,6 +137,8 @@ export default function FeedPage() {
 
   return (
     <>
+      <EngineStatusBar showWaiting />
+
       {/* Filter bar */}
       <div
         style={{
@@ -196,7 +211,23 @@ export default function FeedPage() {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-2)', lineHeight: 1.35, marginBottom: 2 }}>{card.title}</div>
-                      <div style={{ fontSize: 10.5, color: 'var(--muted-2)' }}>{formatTime(card.created_at)}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 10.5, color: 'var(--muted-2)' }}>{formatTime(card.created_at)}</span>
+                        {triggerText(card) && (
+                          <span
+                            style={{
+                              fontSize: 9.5,
+                              padding: '1px 6px',
+                              borderRadius: 3,
+                              background: 'var(--border)',
+                              color: card.trigger === 'important' ? 'var(--accent)' : 'var(--muted)',
+                              fontWeight: card.trigger === 'important' ? 700 : 500,
+                            }}
+                          >
+                            {triggerText(card)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div style={sentBadgeStyle(s)}>
@@ -318,7 +349,7 @@ export default function FeedPage() {
             <p style={{ fontSize: 11, color: 'var(--faint)' }}>
               {positions.length === 0
                 ? 'Dodaj aktywa do portfela, aby system zaczął zbierać informacje.'
-                : 'Insighty pojawią się, gdy silnik analityczny przetworzy nowe źródła.'}
+                : 'Insighty pojawią się, gdy dla aktywa zbierze się paczka trafnych newsów. Stan oczekiwania widać nad listą.'}
             </p>
           </div>
         )}

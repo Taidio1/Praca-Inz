@@ -12,6 +12,7 @@ from src.schemas.sources import (
     SourceHealthOut,
     SourcePage,
 )
+from src.synthesis.budget import Budget, day_start_utc
 
 Row = dict[str, Any]
 Status = Literal["all", "passed", "rejected", "unmatched"]
@@ -55,6 +56,7 @@ class SettingsRepo(Protocol):
 class EngineStatusRepo(Protocol):
     async def latest_cycle(self) -> Row | None: ...
     async def failing_states(self, limit: int = 20) -> list[Row]: ...
+    async def cost_since(self, since: datetime) -> float: ...
 
 
 class SourcesService:
@@ -64,11 +66,15 @@ class SourcesService:
         engine: EngineStatusRepo,
         portfolio: PortfolioRepo,
         settings: SettingsRepo,
+        daily_budget_usd: float = 0.60,
+        cost_reserve_usd: float = 0.01,
     ) -> None:
         self._audit = audit
         self._engine = engine
         self._portfolio = portfolio
         self._settings = settings
+        self._budget = daily_budget_usd
+        self._reserve = cost_reserve_usd
 
     async def _scope(self) -> tuple[list[str], float]:
         positions = await self._portfolio.list_positions()
@@ -117,9 +123,14 @@ class SourcesService:
         data = await self._audit.funnel(since=since, asset_ids=asset_ids, threshold=threshold)
         return FunnelOut(hours=hours, threshold=threshold, **data)
 
-    async def engine_status(self) -> EngineStatusOut:
+    async def engine_status(self, now: datetime | None = None) -> EngineStatusOut:
         cycle = await self._engine.latest_cycle()
         failing = await self._engine.failing_states()
+        day = day_start_utc(now or datetime.now(UTC))
+        today = await self._engine.cost_since(day)
+        month = await self._engine.cost_since(day.replace(day=1))
+        # ta sama reguła co w silniku, żeby UI i synteza zgadzały się co do limitu
+        budget = Budget(self._budget, self._reserve, today)
         return EngineStatusOut(
             last_cycle=EngineCycleOut(
                 started_at=cycle["started_at"], finished_at=cycle.get("finished_at"),
@@ -133,4 +144,8 @@ class SourcesService:
                 )
                 for r in failing
             ],
+            cost_today_usd=round(today, 6),
+            cost_month_usd=round(month, 6),
+            daily_budget_usd=self._budget,
+            budget_exhausted=budget.exhausted,
         )

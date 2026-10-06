@@ -92,3 +92,14 @@ async def test_feed_sets_next_cursor_when_page_full() -> None:
     page = await svc.get_feed(asset_id=None, sentiment=None, cursor=None, limit=3)
     assert len(page.items) == 3
     assert page.next_cursor == rows[2]["created_at"]
+
+
+def test_insight_mapper_carries_trigger() -> None:
+    from src.services.mappers import insight_from_row
+
+    row = {"id": "11111111-1111-1111-1111-111111111111",
+           "asset_id": "aaaaaaaa-0000-0000-0000-000000000001", "assets": {"ticker": "NVDA"},
+           "title": "Tytuł", "summary": "Streszczenie", "sentiment_score": 0.4,
+           "sentiment_label": "positive", "price_context": None,
+           "created_at": "2026-10-06T12:00:00+00:00", "trigger": "batch", "insight_items": []}
+    assert insight_from_row(row).trigger == "batch"

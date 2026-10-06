@@ -17,7 +17,7 @@ const errorLine: React.CSSProperties = {
 };
 
 /* Pasek stanu silnika: kiedy był ostatni cykl, ile pobrał, które źródła zawodzą. */
-export default function EngineStatusBar() {
+export default function EngineStatusBar({ showWaiting = false }: { showWaiting?: boolean }) {
   const [status, setStatus] = useState<EngineStatus | null>(null);
   const [error, setError] = useState(false);
 
@@ -58,6 +58,7 @@ export default function EngineStatusBar() {
   const failingKeys = new Set(failing.map(f => f.key));
   const cycleErrors = Object.entries(cycle?.errors ?? {}).filter(([key]) => !failingKeys.has(key));
   const hasErrors = failing.length > 0 || cycleErrors.length > 0;
+  const waiting = Object.entries(cycle?.stats.synthesis?.waiting ?? {});
 
   return (
     <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', background: 'var(--bg-inset)' }}>
@@ -73,6 +74,21 @@ export default function EngineStatusBar() {
         />
         <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{text}</span>
       </div>
+      {status && (
+        <div style={{ marginTop: 4, fontSize: 10.5, color: status.budget_exhausted ? 'var(--neg)' : 'var(--faint)', fontFamily: MONO }}>
+          LLM dziś {status.cost_today_usd.toFixed(4)} / {status.daily_budget_usd.toFixed(2)} USD · miesiąc {status.cost_month_usd.toFixed(4)} USD
+          {status.budget_exhausted && ' · limit dzienny osiągnięty, synteza wznowi się po północy UTC'}
+        </div>
+      )}
+      {showWaiting && waiting.length > 0 && (
+        <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {waiting.map(([ticker, reason]) => (
+            <div key={`wait-${ticker}`} style={{ ...errorLine, color: 'var(--muted-2)' }}>
+              {ticker} · {reason}
+            </div>
+          ))}
+        </div>
+      )}
       {hasErrors && (
         <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {cycleErrors.map(([key, message]) => (
