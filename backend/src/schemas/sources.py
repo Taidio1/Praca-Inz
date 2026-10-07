@@ -81,3 +81,19 @@ class FunnelOut(BaseModel):
     sent_to_llm: int
     insights: int
     cost_usd: float
+
+
+class EvaluationMetricsOut(BaseModel):
+    threshold: float
+    labeled_pairs: int
+    true_positive: int
+    false_positive: int
+    false_negative: int
+    true_negative: int
+    precision: float | None = None
+    recall: float | None = None
+    f1: float | None = None
+
+
+class RelevanceLabelIn(BaseModel):
+    relevant: bool

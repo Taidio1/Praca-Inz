@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import * as api from '@/lib/api';
-import type { Insight, Trace } from '@/lib/types';
+import type { EvaluationMetrics, Insight, Trace } from '@/lib/types';
 import { formatTime, MONO } from '@/lib/format';
 import EngineStatusBar from '@/components/sources/EngineStatusBar';
 import FunnelPanel from '@/components/sources/FunnelPanel';
@@ -15,14 +15,41 @@ const emptyNote: React.CSSProperties = {
   lineHeight: 1.5,
 };
 
+const sectionStyle: React.CSSProperties = {
+  background: 'var(--panel)',
+  border: '1px solid var(--border)',
+  borderRadius: 12,
+  margin: '10px 12px 0',
+  overflow: 'hidden',
+};
+
+const sectionHeading: React.CSSProperties = {
+  padding: '11px 14px 8px',
+  borderBottom: '1px solid var(--border)',
+  fontSize: 13,
+  fontWeight: 650,
+  color: 'var(--fg-2)',
+};
+
 export default function SourcesPage() {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [insightsLoading, setInsightsLoading] = useState(true);
+  const [traceOpen, setTraceOpen] = useState(false);
   const [expandedTrace, setExpandedTrace] = useState<string | null>(null);
   const [traces, setTraces] = useState<Record<string, Trace | 'loading' | 'error'>>({});
+  const [evaluation, setEvaluation] = useState<EvaluationMetrics | null>(null);
+
+  const loadEvaluation = () => {
+    api.getEvaluationMetrics().then(setEvaluation).catch(() => setEvaluation(null));
+  };
+
+  useEffect(() => {
+    loadEvaluation();
+  }, []);
 
   /* Insighty do sekcji śladu LLM — trace dociągany przy rozwinięciu. */
   useEffect(() => {
+    if (!traceOpen) return;
     let cancelled = false;
     api
       .getFeed({ limit: 10 })
@@ -38,7 +65,7 @@ export default function SourcesPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [traceOpen]);
 
   const toggleTrace = (insightId: string) => {
     const next = expandedTrace === insightId ? null : insightId;
@@ -53,11 +80,11 @@ export default function SourcesPage() {
   };
 
   return (
-    <>
-      <EngineStatusBar />
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ order: 0 }}><EngineStatusBar /></div>
 
-      {/* Metryki jakości filtra — brak endpointu i zbioru ewaluacyjnego */}
-      <div style={{ padding: '14px 14px 12px', borderBottom: '1px solid var(--border)' }}>
+      {/* Metryki jakości filtra: tylko ręcznie oznaczone pary news–aktywo. */}
+      <div style={{ ...sectionStyle, order: 2, padding: '14px 14px 12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: 0.8 }}>
             Jakość filtra trafności
@@ -73,28 +100,49 @@ export default function SourcesPage() {
               padding: '2px 7px',
             }}
           >
-            materiał ewaluacyjny
+            {evaluation ? `${evaluation.labeled_pairs} oznaczonych` : 'materiał ewaluacyjny'}
           </span>
         </div>
-        <div style={emptyNote}>
-          Metryki (precision / recall / F1) będą dostępne po przygotowaniu oznaczonego zbioru ewaluacyjnego i ewaluacji filtra trafności.
-        </div>
+        {!evaluation || evaluation.labeled_pairs === 0 ? (
+          <div style={emptyNote}>Oznacz w audycie pary news–aktywo jako trafne lub nietrafne, aby zbudować zbiór referencyjny i obliczyć metryki.</div>
+        ) : (
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            {([['Precision', evaluation.precision], ['Recall', evaluation.recall], ['F1', evaluation.f1]] as const).map(([label, value]) => (
+              <span key={label} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', fontSize: 11, color: 'var(--fg-3)' }}>
+                {label}: <strong style={{ fontFamily: MONO }}>{value == null ? '—' : `${(value * 100).toFixed(1)}%`}</strong>
+              </span>
+            ))}
+            <span style={{ fontSize: 10.5, color: 'var(--faint)', alignSelf: 'center' }}>TP {evaluation.true_positive} · FP {evaluation.false_positive} · FN {evaluation.false_negative} · TN {evaluation.true_negative} · próg {evaluation.threshold.toFixed(2)}</span>
+          </div>
+        )}
       </div>
 
-      <FunnelPanel />
+      <div style={{ ...sectionStyle, order: 3 }}><FunnelPanel /></div>
 
-      <AuditList />
+      <div style={{ ...sectionStyle, order: 4 }}>
+        <div style={sectionHeading}>Audyt źródeł</div>
+        <AuditList onLabelSaved={loadEvaluation} />
+      </div>
 
       {/* Ślad analizy LLM */}
-      <div style={{ padding: '6px 14px 16px' }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 9 }}>
-          Ślad analizy LLM — prompt + odpowiedź
-        </div>
-        {insightsLoading && <div style={{ fontSize: 12, color: 'var(--muted-2)', padding: '8px 0' }}>Ładowanie…</div>}
-        {!insightsLoading && insights.length === 0 && (
-          <div style={emptyNote}>Brak zapisanych analiz LLM — ślad pojawi się po pierwszej syntezie wykonanej przez silnik.</div>
-        )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <div style={{ ...sectionStyle, order: 1, padding: '0 14px 12px' }}>
+        <button
+          type="button"
+          onClick={() => setTraceOpen(open => !open)}
+          aria-expanded={traceOpen}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+        >
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+            Ślad analizy LLM — prompt + odpowiedź
+          </span>
+          <span aria-hidden="true" style={{ color: 'var(--muted-2)', fontSize: 18, transform: traceOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .18s ease' }}>›</span>
+        </button>
+        {traceOpen && <>
+          {insightsLoading && <div style={{ fontSize: 12, color: 'var(--muted-2)', padding: '8px 0' }}>Ładowanie…</div>}
+          {!insightsLoading && insights.length === 0 && (
+            <div style={emptyNote}>Brak zapisanych analiz LLM — ślad pojawi się po pierwszej syntezie wykonanej przez silnik.</div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           {insights.map(ins => {
             const expanded = expandedTrace === ins.id;
             const tr = traces[ins.id];
@@ -216,8 +264,9 @@ export default function SourcesPage() {
               </div>
             );
           })}
-        </div>
+          </div>
+        </>}
       </div>
-    </>
+    </div>
   );
 }

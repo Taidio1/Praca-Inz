@@ -7,6 +7,7 @@ import type {
   CompanyOverview,
   CompanySearchHit,
   EngineStatus,
+  EvaluationMetrics,
   PeerComparison,
   PopularCompany,
   AssetSearchResult,
@@ -210,6 +211,16 @@ export function getSources(
 
 export function getSourcesFunnel(hours = 24): Promise<SourceFunnel> {
   return request<SourceFunnel>(`/sources/funnel${qs({ hours })}`);
+}
+
+export function getEvaluationMetrics(): Promise<EvaluationMetrics> {
+  return request<EvaluationMetrics>('/sources/evaluation');
+}
+
+export function saveRelevanceLabel(itemId: string, assetId: string, relevant: boolean): Promise<void> {
+  return request<void>(`/sources/${itemId}/labels/${assetId}`, {
+    method: 'PUT', body: JSON.stringify({ relevant }),
+  });
 }
 
 export function getEngineStatus(): Promise<EngineStatus> {

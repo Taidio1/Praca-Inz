@@ -40,7 +40,7 @@ function chip(active: boolean): React.CSSProperties {
 }
 
 /* Audyt filtra: każdy item z oceną per aktywo i powodem (reason), także odrzucone. */
-export default function AuditList() {
+export default function AuditList({ onLabelSaved }: { onLabelSaved?: () => void }) {
   const { positions, settingsThreshold } = useApp();
   const [status, setStatus] = useState<SourceStatus>('all');
   const [assetId, setAssetId] = useState<string | null>(null);
@@ -49,6 +49,22 @@ export default function AuditList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [savingLabel, setSavingLabel] = useState<string | null>(null);
+  const [labels, setLabels] = useState<Record<string, boolean>>({});
+
+  const label = async (itemId: string, assetId: string, relevant: boolean) => {
+    const key = `${itemId}:${assetId}`;
+    setSavingLabel(key);
+    try {
+      await api.saveRelevanceLabel(itemId, assetId, relevant);
+      setLabels(previous => ({ ...previous, [key]: relevant }));
+      onLabelSaved?.();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać etykiety.');
+    } finally {
+      setSavingLabel(null);
+    }
+  };
 
   const load = useCallback(
     async (after?: string) => {
@@ -143,6 +159,22 @@ export default function AuditList() {
                       <span style={{ fontFamily: MONO, color: 'var(--fg-3)' }}>{a.ticker} · {a.method}</span> · {a.reason}
                     </div>
                   ))}
+                </div>
+              )}
+              {it.relevance_done && positions.length > 0 && (
+                <div style={{ marginTop: 8, paddingTop: 7, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <span style={{ fontSize: 9.5, color: 'var(--faint)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Oznacz zbiór ewaluacyjny</span>
+                  {positions.map(p => {
+                    const key = `${it.item_id}:${p.asset.id}`;
+                    const current = labels[key];
+                    return (
+                      <div key={p.asset.id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 42, fontFamily: MONO, fontSize: 10, color: 'var(--muted)' }}>{p.asset.ticker}</span>
+                        <button type="button" disabled={savingLabel === key} onClick={() => void label(it.item_id, p.asset.id, true)} style={{ border: '1px solid var(--pos-line)', background: current === true ? 'var(--pos-soft)' : 'transparent', color: 'var(--pos)', borderRadius: 5, padding: '2px 7px', cursor: 'pointer', fontSize: 10, fontFamily: 'inherit' }}>Trafne</button>
+                        <button type="button" disabled={savingLabel === key} onClick={() => void label(it.item_id, p.asset.id, false)} style={{ border: '1px solid var(--neg-line)', background: current === false ? 'var(--neg-soft)' : 'transparent', color: 'var(--neg)', borderRadius: 5, padding: '2px 7px', cursor: 'pointer', fontSize: 10, fontFamily: 'inherit' }}>Nietrafne</button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

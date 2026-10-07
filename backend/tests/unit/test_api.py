@@ -18,7 +18,13 @@ from src.schemas.portfolio import (
     TransactionOut,
     TransactionUpdate,
 )
-from src.schemas.sources import EngineStatusOut, FunnelOut, RawSourceItemOut, SourcePage
+from src.schemas.sources import (
+    EngineStatusOut,
+    EvaluationMetricsOut,
+    FunnelOut,
+    RawSourceItemOut,
+    SourcePage,
+)
 
 USER = CurrentUser(id="11111111-1111-1111-1111-111111111111", token="t")
 ASSET = AssetOut(
@@ -390,18 +396,53 @@ async def test_fx_rate_missing_rate_gives_404(app: FastAPI) -> None:
 
 class FakeSourcesService:
     async def list_items(self, *, status, asset_id, cursor, limit):  # type: ignore[no-untyped-def]
-        return SourcePage(items=[RawSourceItemOut(
-            item_id=UUID("bbbbbbbb-0000-0000-0000-000000000001"), source="rss",
-            url="https://www.bankier.pl/x.html", title="Orlen", fetched_at=datetime(2026, 10, 6),
-        )], next_cursor=None)
+        return SourcePage(
+            items=[
+                RawSourceItemOut(
+                    item_id=UUID("bbbbbbbb-0000-0000-0000-000000000001"),
+                    source="rss",
+                    url="https://www.bankier.pl/x.html",
+                    title="Orlen",
+                    fetched_at=datetime(2026, 10, 6),
+                )
+            ],
+            next_cursor=None,
+        )
 
     async def engine_status(self) -> EngineStatusOut:
         return EngineStatusOut(last_cycle=None, failing_sources=[])
 
     async def funnel(self, *, hours):  # type: ignore[no-untyped-def]
-        return FunnelOut(hours=hours, threshold=0.5, fetched=10, duplicates=1, scored=9,
-                         candidates=4, passed=2, rejected=2, unmatched=5, sent_to_llm=0,
-                         insights=0, cost_usd=0.0)
+        return FunnelOut(
+            hours=hours,
+            threshold=0.5,
+            fetched=10,
+            duplicates=1,
+            scored=9,
+            candidates=4,
+            passed=2,
+            rejected=2,
+            unmatched=5,
+            sent_to_llm=0,
+            insights=0,
+            cost_usd=0.0,
+        )
+
+    async def evaluation(self) -> EvaluationMetricsOut:
+        return EvaluationMetricsOut(
+            threshold=0.5,
+            labeled_pairs=4,
+            true_positive=1,
+            false_positive=1,
+            false_negative=1,
+            true_negative=1,
+            precision=0.5,
+            recall=0.5,
+            f1=0.5,
+        )
+
+    async def label(self, user_id: str, item_id: str, asset_id: str, *, relevant: bool) -> None:
+        self.labelled = (user_id, item_id, asset_id, relevant)
 
 
 async def test_sources_endpoint_lists_items(app: FastAPI) -> None:
@@ -447,3 +488,41 @@ async def test_sources_funnel_endpoint(app: FastAPI) -> None:
         res = await client.get("/api/v1/sources/funnel?hours=48")
     assert res.status_code == 200
     assert res.json()["hours"] == 48 and res.json()["passed"] == 2
+
+
+async def test_sources_evaluation_endpoint_returns_metrics(app: FastAPI) -> None:
+    app.dependency_overrides[deps.get_current_user] = lambda: USER
+    app.dependency_overrides[deps.get_sources_service] = FakeSourcesService
+    async with client_for(app) as client:
+        res = await client.get("/api/v1/sources/evaluation")
+    assert res.status_code == 200
+    assert res.json() == {
+        "threshold": 0.5,
+        "labeled_pairs": 4,
+        "true_positive": 1,
+        "false_positive": 1,
+        "false_negative": 1,
+        "true_negative": 1,
+        "precision": 0.5,
+        "recall": 0.5,
+        "f1": 0.5,
+    }
+
+
+async def test_sources_label_endpoint_saves_manual_assessment(app: FastAPI) -> None:
+    fake = FakeSourcesService()
+    app.dependency_overrides[deps.get_current_user] = lambda: USER
+    app.dependency_overrides[deps.get_sources_service] = lambda: fake
+    async with client_for(app) as client:
+        res = await client.put(
+            "/api/v1/sources/bbbbbbbb-0000-0000-0000-000000000001/labels/"
+            "aaaaaaaa-0000-0000-0000-000000000001",
+            json={"relevant": True},
+        )
+    assert res.status_code == 204
+    assert fake.labelled == (
+        USER.id,
+        "bbbbbbbb-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        True,
+    )

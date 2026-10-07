@@ -368,6 +368,18 @@ export interface SourceFunnel {
   cost_usd: number;
 }
 
+export interface EvaluationMetrics {
+  threshold: number;
+  labeled_pairs: number;
+  true_positive: number;
+  false_positive: number;
+  false_negative: number;
+  true_negative: number;
+  precision: number | null;
+  recall: number | null;
+  f1: number | null;
+}
+
 export interface SourcePage {
   items: RawSourceItem[];
   next_cursor: string | null;
